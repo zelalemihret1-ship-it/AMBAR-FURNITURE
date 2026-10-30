@@ -744,7 +744,10 @@ def auth_result(init_data):
     """
     if init_data:
         return validate_telegram_init_data(init_data)
-    if not REQUIRE_TELEGRAM_AUTH and WEB_CUSTOMER_MODE:
+    # Independent browser access is enabled by WEB_CUSTOMER_MODE.
+    # REQUIRE_TELEGRAM_AUTH applies to Telegram-signed identities and privileged
+    # admin routes; it must not disable the separate customer web session.
+    if WEB_CUSTOMER_MODE:
         return True, web_customer_id()
     return False, None
 
@@ -1168,6 +1171,7 @@ def api_health():
         "supabase_configured": bool(supabase_enabled()),
         "telegram_auth_required": REQUIRE_TELEGRAM_AUTH,
         "web_customer_mode": WEB_CUSTOMER_MODE,
+        "web_customer_auth_available": WEB_CUSTOMER_MODE,
         "telegram_bot_optional": True,
         "access_modes": ["telegram_mini_app", "independent_web_app"] if WEB_CUSTOMER_MODE else ["telegram_mini_app"],
     }), 200
@@ -4321,7 +4325,7 @@ def authenticated_telegram_user():
     load_product_catalog()
     init_data = request.headers.get("X-Telegram-Init-Data", "")
     valid, user_id = validate_telegram_init_data(init_data) if init_data else (False, None)
-    if not init_data and not REQUIRE_TELEGRAM_AUTH and WEB_CUSTOMER_MODE:
+    if not init_data and WEB_CUSTOMER_MODE:
         user_id = web_customer_id()
         safe_user = {"id": user_id, "first_name": "AMBAR", "last_name": "Customer", "username": "", "language_code": "en", "photo_url": ""}
         return jsonify(authenticated=True, user=safe_user, is_admin=False, admin_permissions=[],
