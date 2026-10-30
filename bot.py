@@ -725,6 +725,40 @@ def validate_telegram_init_data(init_data):
         return False, None
 
 
+def telegram_init_data_failure_reason(init_data):
+    """Return a safe, actionable reason when Telegram initData cannot be verified."""
+    if not BOT_TOKEN:
+        return "The V2 server is missing BOT_TOKEN. Add the token for @AMBAR_SALESBOT in the V2 Render environment."
+    if not init_data or not isinstance(init_data, str):
+        return "Telegram did not provide sign-in data. Open @AMBAR_SALESBOT in Telegram and tap Open AMBAR; do not open the website link in an external browser."
+    try:
+        parsed = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True)
+        if len({key for key, _ in parsed}) != len(parsed):
+            return "Telegram sign-in data contains duplicate fields. Close the Mini App completely and launch it again from @AMBAR_SALESBOT."
+        pairs = dict(parsed)
+        received_hash = pairs.pop("hash", None)
+        pairs.pop("signature", None)
+        if not received_hash or not re.fullmatch(r"[0-9a-f]{64}", received_hash):
+            return "Telegram did not provide a valid sign-in hash. Reopen the Mini App from the new AMBAR bot."
+        try:
+            auth_date = int(pairs.get("auth_date", "0"))
+        except (TypeError, ValueError):
+            auth_date = 0
+        now = int(time.time())
+        if auth_date <= 0 or auth_date > now + 60 or now - auth_date > 86400:
+            return "Your Telegram sign-in has expired. Close AMBAR, return to @AMBAR_SALESBOT, and tap Open AMBAR again."
+        if not pairs.get("user"):
+            return "Telegram did not include your signed profile. Reopen AMBAR from the bot's Mini App button."
+        data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(pairs.items()))
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
+        calculated = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calculated, received_hash):
+            return "The V2 server token does not match the bot that opened this Mini App. In V2 Render, set BOT_TOKEN to the token for @AMBAR_SALESBOT (not the old production bot), then redeploy."
+        return "Telegram sign-in could not be verified. Close and reopen the Mini App from @AMBAR_SALESBOT."
+    except (ValueError, TypeError):
+        return "Telegram sent malformed sign-in data. Update Telegram and reopen AMBAR from @AMBAR_SALESBOT."
+
+
 def require_auth_from_request():
     init_data = request.headers.get("X-Telegram-Init-Data", "")
     if request.is_json:
@@ -4333,9 +4367,12 @@ def authenticated_telegram_user():
                        has_main_admin_access=False, has_workshop_access=False, workshop_only_role=False,
                        auth_mode="web_guest"), 200
     if not valid or not user_id:
+        reason = telegram_init_data_failure_reason(init_data)
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_or_missing_telegram_auth"})
-        return jsonify(authenticated=False, error="Customer sign-in could not be started. Please refresh the page.", error_code="customer_session_unavailable"), 401
+        log.warning("Customer Telegram sign-in rejected: %s", reason)
+        return jsonify(authenticated=False, error=reason, error_code="telegram_auth_failed",
+                       expected_bot_username=BOT_PUBLIC_USERNAME), 401
     try:
         pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
         user = json.loads(pairs.get("user", "{}"))
