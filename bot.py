@@ -670,7 +670,11 @@ def validate_telegram_init_data(init_data):
     third-party verification. It is not part of the bot-token HMAC data-check
     string; only the signed fields (excluding hash/signature) are included.
     """
-    if not BOT_TOKEN or not init_data or not isinstance(init_data, str):
+    if not BOT_TOKEN:
+        log.error("Telegram Mini App auth unavailable: BOT_TOKEN is not configured on this V2 service")
+        return False, None
+    if not init_data or not isinstance(init_data, str):
+        log.warning("Telegram Mini App auth rejected: X-Telegram-Init-Data header is missing or empty")
         return False, None
     try:
         parsed = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True)
@@ -1117,6 +1121,20 @@ def parse_standard_order(data):
     material = clean_text(data.get("material", ""), 120, "Material preference")
     notes = clean_text(data.get("notes", ""), 1000, "Notes")
     return customer, normalized, total, finish, material, notes
+
+
+@app.get("/api/health")
+def api_health():
+    """Non-secret deployment diagnostics for the V2 Mini App."""
+    return jsonify({
+        "status": "ok",
+        "service": "ambar-furniture-miniapp",
+        "telegram_bot_token_configured": bool(BOT_TOKEN),
+        "telegram_bot_username": BOT_PUBLIC_USERNAME,
+        "webapp_url_configured": bool(WEBAPP_URL),
+        "supabase_configured": bool(supabase_enabled()),
+        "telegram_auth_required": REQUIRE_TELEGRAM_AUTH,
+    }), 200
 
 
 @app.get("/")
@@ -4270,7 +4288,7 @@ def authenticated_telegram_user():
     if not valid or not user_id:
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_or_missing_telegram_auth"})
-        return jsonify(authenticated=False, error="Telegram authentication failed. Open the Mini App from the AMBAR Telegram bot."), 401
+        return jsonify(authenticated=False, error="Telegram authentication failed. Open the Mini App from the AMBAR Telegram bot.", error_code="telegram_init_data_invalid_or_missing"), 401
     try:
         pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
         user = json.loads(pairs.get("user", "{}"))
@@ -4279,7 +4297,7 @@ def authenticated_telegram_user():
     except (ValueError, TypeError, json.JSONDecodeError):
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_signed_profile_data"})
-        return jsonify(authenticated=False, error="Telegram profile data is invalid."), 401
+        return jsonify(authenticated=False, error="Telegram profile data is invalid.", error_code="telegram_profile_payload_invalid"), 401
     # Profile fields are read from Telegram's signed initData only after HMAC verification.
     safe_user = {
         "id": user_id,
