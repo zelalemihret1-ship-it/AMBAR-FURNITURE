@@ -49,7 +49,7 @@ CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip()
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-dvit.onrender.com/").strip()
 BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "AMBAR_SALESBOT").strip().lstrip("@")
 REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "false").strip().lower() in {"1", "true", "yes", "on"}
-WEB_CUSTOMER_MODE = True  # Dual-access is built in: independent browser customers are always enabled.
+WEB_CUSTOMER_MODE = True  # Customer sign-in is web-only for this release; Telegram login will be re-enabled later.
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
 
 CATEGORIES = ["Shoe Shelf", "Consul Table", "Center Table", "TV Stand", "Chest Drawer", "Dining Table", "Wardrobe", "Other"]
@@ -737,18 +737,13 @@ def require_auth_from_request():
     return validate_telegram_init_data(init_data), None
 
 
-def auth_result(init_data):
-    """Accept verified Telegram identity inside Telegram, or a browser session outside it.
+def auth_result(init_data=""):
+    """Web-only customer identity for this release.
 
-    A supplied but invalid Telegram initData must never silently downgrade to a web guest.
+    Telegram initData is deliberately ignored for customer routes until the
+    Telegram integration is re-enabled after the independent web app is stable.
+    Privileged admin routes continue to use their separate authorization checks.
     """
-    if init_data:
-        return validate_telegram_init_data(init_data)
-    # Independent browser access is enabled by WEB_CUSTOMER_MODE.
-    # REQUIRE_TELEGRAM_AUTH applies to Telegram-signed identities and privileged
-    # admin routes; it must not disable the separate customer web session.
-    # No Telegram initData means this is the independent website path.
-    # The generated Flask session identity is customer-only; it never grants admin access.
     return True, web_customer_id()
 
 
@@ -997,7 +992,7 @@ def send_order_album(caption, items, payment_path=None):
 
 
 def maybe_send_customer_confirmation(user_id, text):
-    if not user_id:
+    if not user_id or str(user_id).startswith("web-"):
         return False
     try:
         bot_api("sendMessage", {"chat_id": str(user_id), "text": text})
@@ -1010,7 +1005,7 @@ def maybe_send_customer_confirmation(user_id, text):
 
 def maybe_send_customer_confirmation_with_photos(user_id, text, photo_paths):
     """Send a compact confirmation with only the first product photo."""
-    if not user_id:
+    if not user_id or str(user_id).startswith("web-"):
         return False
     paths = [Path(path) for path in photo_paths if path and Path(path).is_file()][:1]
     if not paths:
@@ -1143,37 +1138,18 @@ def parse_standard_order(data):
 
 @app.get("/api/health")
 def api_health():
-    """Non-secret V2 diagnostics, including proof that BOT_TOKEN belongs to the new bot."""
-    actual_username = None
-    bot_identity_ok = False
-    bot_identity_error = None
-    if BOT_TOKEN:
-        try:
-            response = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=8)
-            payload = response.json()
-            if response.ok and payload.get("ok") and isinstance(payload.get("result"), dict):
-                actual_username = str(payload["result"].get("username") or "").lstrip("@")
-                bot_identity_ok = actual_username.casefold() == BOT_PUBLIC_USERNAME.casefold()
-            else:
-                bot_identity_error = "Telegram rejected the configured bot token"
-        except Exception as exc:
-            bot_identity_error = type(exc).__name__
+    """Non-secret diagnostics for the independent web-only release."""
     return jsonify({
         "status": "ok",
         "service": "ambar-furniture-miniapp-v2",
-        "telegram_bot_token_configured": bool(BOT_TOKEN),
-        "telegram_expected_bot_username": BOT_PUBLIC_USERNAME,
-        "telegram_actual_bot_username": actual_username,
-        "telegram_bot_identity_ok": bot_identity_ok,
-        "telegram_bot_identity_error": bot_identity_error,
-        "webapp_url": WEBAPP_URL,
+        "customer_auth_mode": "web_only",
+        "web_customer_mode": True,
+        "web_customer_auth_available": True,
+        "telegram_sign_in": "disabled_until_later_release",
+        "telegram_bot_optional": True,
         "webapp_url_configured": bool(WEBAPP_URL),
         "supabase_configured": bool(supabase_enabled()),
-        "telegram_auth_required": REQUIRE_TELEGRAM_AUTH,
-        "web_customer_mode": WEB_CUSTOMER_MODE,
-        "web_customer_auth_available": WEB_CUSTOMER_MODE,
-        "telegram_bot_optional": True,
-        "access_modes": ["telegram_mini_app", "independent_web_app"] if WEB_CUSTOMER_MODE else ["telegram_mini_app"],
+        "access_modes": ["independent_web_app"],
     }), 200
 
 
@@ -2182,7 +2158,7 @@ def my_app_state():
     init_data = request.headers.get("X-Telegram-Init-Data", "")
     valid, user_id = auth_result(init_data)
     if not valid or not user_id:
-        return jsonify(error="Open AMBAR from your Telegram bot to sync your account across devices."), 401
+        return jsonify(error="Your customer session expired. Refresh the page and try again."), 401
     if not supabase_enabled():
         return jsonify(error="Cross-device sync is not configured. Run the supplied SQL migration."), 503
     try:
@@ -2311,7 +2287,7 @@ def confirm_delivered_order(reference):
     init_data = request.headers.get("X-Telegram-Init-Data", "")
     valid, user_id = auth_result(init_data)
     if not valid or not user_id:
-        return jsonify(error="Open AMBAR from your Telegram bot to confirm delivery."), 401
+        return jsonify(error="Your customer session expired. Refresh the page and try again."), 401
     if not supabase_enabled():
         return jsonify(error="Order tracking is not configured yet."), 503
     try:
@@ -2368,7 +2344,7 @@ def cancel_my_order(reference):
     init_data = request.headers.get("X-Telegram-Init-Data", "")
     valid, user_id = auth_result(init_data)
     if not valid or not user_id:
-        return jsonify(error="Open AMBAR from your Telegram bot to manage your orders."), 401
+        return jsonify(error="Your customer session expired. Refresh the page and try again."), 401
     if not supabase_enabled():
         return jsonify(error="Order tracking is not configured yet."), 503
     reference = clean_text(reference, 40, "Order reference", True)
@@ -4321,67 +4297,28 @@ def health():
 
 
 @app.get("/api/auth/me")
-def authenticated_telegram_user():
+def authenticated_customer():
+    """Start an independent browser customer session; no Telegram login required."""
     load_product_catalog()
-    init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data) if init_data else (False, None)
-    if not init_data:
-        # Independent website access: establish a signed, HTTP-only Flask session.
-        # This path is intentionally independent of Telegram and Render feature flags.
-        user_id = web_customer_id()
-        safe_user = {"id": user_id, "first_name": "AMBAR", "last_name": "Customer", "username": "", "language_code": "en", "photo_url": ""}
-        response = jsonify(authenticated=True, user=safe_user, is_admin=False, admin_permissions=[],
-                           has_main_admin_access=False, has_workshop_access=False, workshop_only_role=False,
-                           auth_mode="web_guest")
-        response.headers["Cache-Control"] = "no-store"
-        return response, 200
-    if not valid or not user_id:
-        write_security_event("failed_customer_auth", path=request.path, method=request.method,
-                             status_code=401, details={"reason": "invalid_or_missing_telegram_auth"})
-        return jsonify(authenticated=False, error="Customer sign-in could not be started. Please refresh the page.", error_code="customer_session_unavailable"), 401
-    try:
-        pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
-        user = json.loads(pairs.get("user", "{}"))
-        if str(user.get("id", "")) != user_id:
-            raise ValueError("User identity mismatch")
-    except (ValueError, TypeError, json.JSONDecodeError):
-        write_security_event("failed_customer_auth", path=request.path, method=request.method,
-                             status_code=401, details={"reason": "invalid_signed_profile_data"})
-        return jsonify(authenticated=False, error="Telegram profile data is invalid.", error_code="telegram_profile_payload_invalid"), 401
-    # Profile fields are read from Telegram's signed initData only after HMAC verification.
+    user_id = web_customer_id()
     safe_user = {
         "id": user_id,
-        "first_name": clean_text(user.get("first_name", ""), 100, "First name"),
-        "last_name": clean_text(user.get("last_name", ""), 100, "Last name"),
-        "username": clean_text(user.get("username", ""), 100, "Username"),
-        "language_code": clean_text(user.get("language_code", ""), 20, "Language"),
-        "photo_url": clean_text(user.get("photo_url", ""), 2000, "Profile photo URL"),
+        "first_name": "AMBAR",
+        "last_name": "Customer",
+        "username": "",
+        "language_code": "en",
+        "photo_url": "",
     }
-    # Show the admin entry point to the owner and any active staff account saved
-    # in Supabase. Staff do not need to be added to the Render allowlist.
-    is_owner = is_main_admin_user(user_id)
-    role_data = None if is_owner else admin_permissions_for(user_id)
-    is_admin = is_owner or bool(role_data and role_data.get("active", False) and role_data.get("role") != "disabled")
-    permissions = ["*"] if is_owner else ((role_data or {}).get("permissions") or (["orders"] if (role_data or {}).get("role") == "orders" else []))
-    write_security_event("customer_sign_in", actor_id=user_id, path=request.path, method=request.method,
-                         status_code=200, details={"source": "telegram_mini_app",
-                             "username": safe_user["username"], "first_name": safe_user["first_name"],
-                             "last_name": safe_user["last_name"]})
-    effective_permissions = normalize_admin_permissions(permissions) if is_admin else []
-    non_workshop_permissions = [p for p in effective_permissions if p not in {"workshop_erp", "workshop_watch"}]
-    # Section visibility is independent: the owner always sees both; staff see only
-    # the sections explicitly assigned to them. A full-access '*' assignment grants both.
-    has_main_admin_access = bool(is_admin and (is_owner or "*" in effective_permissions or non_workshop_permissions))
-    has_workshop_access = bool(is_admin and (is_owner or "*" in effective_permissions or "workshop_erp" in effective_permissions))
-    workshop_only_role = bool(has_workshop_access and not has_main_admin_access)
-    response = jsonify(authenticated=True, user=safe_user, is_admin=is_admin,
-                       admin_permissions=permissions if is_admin else [],
-                       has_main_admin_access=has_main_admin_access,
-                       has_workshop_access=has_workshop_access,
-                       workshop_only_role=workshop_only_role,
-                       workshop_role_label=("Workshop Activity Observer" if "workshop_watch" in effective_permissions else "Workshop ERP Staff") if workshop_only_role else None)
-    response.headers["Cache-Control"] = "no-store"
-    return response, 200
+    return jsonify(
+        authenticated=True,
+        user=safe_user,
+        is_admin=False,
+        admin_permissions=[],
+        has_main_admin_access=False,
+        has_workshop_access=False,
+        workshop_only_role=False,
+        auth_mode="web_only",
+    ), 200
 
 
 @app.post("/api/cart-event")
@@ -4453,7 +4390,7 @@ def create_order():
     valid, telegram_user_id = auth_result(init_data)
     telegram_username = telegram_username_from_init_data(init_data) if valid else "Not available"
     if not valid:
-        return jsonify(error="Telegram authentication failed. Please close the Mini App and open it again from your Telegram bot."), 401
+        return jsonify(error="Your customer session could not be started. Please refresh the page and try again."), 401
     try:
         customer, items, total, finish, material, notes = parse_standard_order(data)
     except ValueError as exc:
@@ -4529,7 +4466,7 @@ def submit_payment_screenshot():
     valid, telegram_user_id = auth_result(init_data)
     telegram_username = telegram_username_from_init_data(init_data) if valid else "Not available"
     if not valid:
-        return jsonify(error="Telegram authentication failed. Please close the Mini App and reopen it from your Telegram bot."), 401
+        return jsonify(error="Your customer session could not be started. Please refresh the page and try again."), 401
     reference = clean_text(request.form.get("reference"), 40, "Order reference", True)
     if not re.fullmatch(r"AF-[A-Z0-9]{6}", reference):
         return jsonify(error="The order reference format is invalid. Please submit your order again if needed."), 400
@@ -4668,7 +4605,7 @@ def submit_order_with_payment_choice():
     valid, telegram_user_id = auth_result(init_data)
     telegram_username = telegram_username_from_init_data(init_data) if valid else "Not available"
     if not valid:
-        return jsonify(error="Telegram authentication failed. Please close the Mini App and reopen it from your Telegram bot."), 401
+        return jsonify(error="Your customer session could not be started. Please refresh the page and try again."), 401
     try:
         raw_order = json.loads(request.form.get("order_json", ""))
         customer, items, total, finish, material, notes = parse_standard_order(raw_order)
@@ -4873,11 +4810,10 @@ def submit_order_with_payment_choice():
         if not supabase_enabled():
             return jsonify(error="Order tracking is not configured yet. Please contact AMBAR before submitting again."), 503
         try:
-            # Store the verified Telegram ID, not a development-mode None value.
-            _, verified_order_user_id = validate_telegram_init_data(init_data)
-            verified_order_user_id = verified_order_user_id or telegram_user_id
+            # Attach the order to this browser's server-issued customer session.
+            verified_order_user_id = telegram_user_id
             if not verified_order_user_id:
-                raise RuntimeError("Verified Telegram user ID is unavailable; cannot attach order to a customer account.")
+                raise RuntimeError("Customer session is unavailable; refresh and try again.")
             location_text = str(customer.get("location", ""))
             payment_label = (f"{payment_percentage}% advance screenshot submitted — review pending" if payment_option == "pay_now" else (f"Chapa {payment_percentage}% advance payment pending" if payment_option == "chapa" else ("Recipient pays on delivery — pending" if order_for == "someone_else" and payer == "recipient" else "Pay later — pending")))
             # Store recipient details inside the existing notes field for compatibility with deployed schemas.
@@ -5013,7 +4949,7 @@ def create_custom_request():
     telegram_username = telegram_username_from_init_data(init_data) if valid else "Not available"
     telegram_language = telegram_language_from_init_data(init_data) if valid else "Not available"
     if not valid:
-        return jsonify(error="Telegram authentication failed. Please close the Mini App and open it again from your Telegram bot."), 401
+        return jsonify(error="Your customer session could not be started. Please refresh the page and try again."), 401
     try:
         category = clean_text(request.form.get("category"), 140, "Furniture category", True)
         if category not in CATEGORIES and not (category.startswith("Other: ") and len(category[7:].strip()) > 0):
