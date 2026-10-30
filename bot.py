@@ -49,7 +49,7 @@ CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip()
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-dvit.onrender.com/").strip()
 BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "AMBAR_SALESBOT").strip().lstrip("@")
 REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "false").strip().lower() in {"1", "true", "yes", "on"}
-WEB_CUSTOMER_MODE = os.getenv("WEB_CUSTOMER_MODE", "true").strip().lower() in {"1", "true", "yes", "on"}
+WEB_CUSTOMER_MODE = True  # Dual-access is built in: independent browser customers are always enabled.
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
 
 CATEGORIES = ["Shoe Shelf", "Consul Table", "Center Table", "TV Stand", "Chest Drawer", "Dining Table", "Wardrobe", "Other"]
@@ -747,9 +747,9 @@ def auth_result(init_data):
     # Independent browser access is enabled by WEB_CUSTOMER_MODE.
     # REQUIRE_TELEGRAM_AUTH applies to Telegram-signed identities and privileged
     # admin routes; it must not disable the separate customer web session.
-    if WEB_CUSTOMER_MODE:
-        return True, web_customer_id()
-    return False, None
+    # No Telegram initData means this is the independent website path.
+    # The generated Flask session identity is customer-only; it never grants admin access.
+    return True, web_customer_id()
 
 
 def telegram_username_from_init_data(init_data):
@@ -4325,12 +4325,16 @@ def authenticated_telegram_user():
     load_product_catalog()
     init_data = request.headers.get("X-Telegram-Init-Data", "")
     valid, user_id = validate_telegram_init_data(init_data) if init_data else (False, None)
-    if not init_data and WEB_CUSTOMER_MODE:
+    if not init_data:
+        # Independent website access: establish a signed, HTTP-only Flask session.
+        # This path is intentionally independent of Telegram and Render feature flags.
         user_id = web_customer_id()
         safe_user = {"id": user_id, "first_name": "AMBAR", "last_name": "Customer", "username": "", "language_code": "en", "photo_url": ""}
-        return jsonify(authenticated=True, user=safe_user, is_admin=False, admin_permissions=[],
-                       has_main_admin_access=False, has_workshop_access=False, workshop_only_role=False,
-                       auth_mode="web_guest"), 200
+        response = jsonify(authenticated=True, user=safe_user, is_admin=False, admin_permissions=[],
+                           has_main_admin_access=False, has_workshop_access=False, workshop_only_role=False,
+                           auth_mode="web_guest")
+        response.headers["Cache-Control"] = "no-store"
+        return response, 200
     if not valid or not user_id:
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_or_missing_telegram_auth"})
@@ -4370,12 +4374,14 @@ def authenticated_telegram_user():
     has_main_admin_access = bool(is_admin and (is_owner or "*" in effective_permissions or non_workshop_permissions))
     has_workshop_access = bool(is_admin and (is_owner or "*" in effective_permissions or "workshop_erp" in effective_permissions))
     workshop_only_role = bool(has_workshop_access and not has_main_admin_access)
-    return jsonify(authenticated=True, user=safe_user, is_admin=is_admin,
-                   admin_permissions=permissions if is_admin else [],
-                   has_main_admin_access=has_main_admin_access,
-                   has_workshop_access=has_workshop_access,
-                   workshop_only_role=workshop_only_role,
-                   workshop_role_label=("Workshop Activity Observer" if "workshop_watch" in effective_permissions else "Workshop ERP Staff") if workshop_only_role else None), 200
+    response = jsonify(authenticated=True, user=safe_user, is_admin=is_admin,
+                       admin_permissions=permissions if is_admin else [],
+                       has_main_admin_access=has_main_admin_access,
+                       has_workshop_access=has_workshop_access,
+                       workshop_only_role=workshop_only_role,
+                       workshop_role_label=("Workshop Activity Observer" if "workshop_watch" in effective_permissions else "Workshop ERP Staff") if workshop_only_role else None)
+    response.headers["Cache-Control"] = "no-store"
+    return response, 200
 
 
 @app.post("/api/cart-event")
