@@ -22,7 +22,7 @@ try:
 except ImportError:  # image card falls back to the original product photo
     Image = ImageDraw = ImageFont = ImageOps = None
 from flask import Flask, g, jsonify, request, send_from_directory, send_file
-from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp
 from telegram.ext import Application, CommandHandler, ContextTypes
 from werkzeug.utils import secure_filename
 
@@ -1125,12 +1125,30 @@ def parse_standard_order(data):
 
 @app.get("/api/health")
 def api_health():
-    """Non-secret deployment diagnostics for the V2 Mini App."""
+    """Non-secret V2 diagnostics, including proof that BOT_TOKEN belongs to the new bot."""
+    actual_username = None
+    bot_identity_ok = False
+    bot_identity_error = None
+    if BOT_TOKEN:
+        try:
+            response = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=8)
+            payload = response.json()
+            if response.ok and payload.get("ok") and isinstance(payload.get("result"), dict):
+                actual_username = str(payload["result"].get("username") or "").lstrip("@")
+                bot_identity_ok = actual_username.casefold() == BOT_PUBLIC_USERNAME.casefold()
+            else:
+                bot_identity_error = "Telegram rejected the configured bot token"
+        except Exception as exc:
+            bot_identity_error = type(exc).__name__
     return jsonify({
         "status": "ok",
-        "service": "ambar-furniture-miniapp",
+        "service": "ambar-furniture-miniapp-v2",
         "telegram_bot_token_configured": bool(BOT_TOKEN),
-        "telegram_bot_username": BOT_PUBLIC_USERNAME,
+        "telegram_expected_bot_username": BOT_PUBLIC_USERNAME,
+        "telegram_actual_bot_username": actual_username,
+        "telegram_bot_identity_ok": bot_identity_ok,
+        "telegram_bot_identity_error": bot_identity_error,
+        "webapp_url": WEBAPP_URL,
         "webapp_url_configured": bool(WEBAPP_URL),
         "supabase_configured": bool(supabase_enabled()),
         "telegram_auth_required": REQUIRE_TELEGRAM_AUTH,
@@ -5313,6 +5331,21 @@ def start_telegram_polling():
         telegram_app.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
         async def runner():
             await telegram_app.initialize()
+            # Fail closed if Render accidentally has the production/old bot token.
+            me = await telegram_app.bot.get_me()
+            actual_username = str(me.username or "").lstrip("@")
+            if actual_username.casefold() != BOT_PUBLIC_USERNAME.casefold():
+                raise RuntimeError(
+                    f"Wrong Telegram bot token on this V2 service: expected @{BOT_PUBLIC_USERNAME}, "
+                    f"but BOT_TOKEN belongs to @{actual_username or 'unknown'}. Update only the V2 Render BOT_TOKEN."
+                )
+            await telegram_app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Open AMBAR",
+                    web_app=WebAppInfo(url=WEBAPP_URL)
+                )
+            )
+            log.info("Verified new Telegram bot @%s and configured its Mini App menu button", actual_username)
             if telegram_app.job_queue is not None:
                 try:
                     notification_tz = ZoneInfo(NOTIFICATION_TIMEZONE)
