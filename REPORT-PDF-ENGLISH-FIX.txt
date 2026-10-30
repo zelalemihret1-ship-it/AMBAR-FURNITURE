@@ -1,0 +1,15 @@
+AMBAR WORKSHOP ERP — ENGLISH PDF REPORT FIX
+
+Changes:
+- PDF report title, metadata labels, section names, column headers, stock statuses, and common activity labels now use English.
+- Reporting period dates are formatted in English (for example, 19 Oct 2026 – 25 Oct 2026).
+- PDF output uses ReportLab Helvetica for Latin text rather than relying on an Ethiopic font for an English-only report, preventing Amharic labels from appearing as black square glyphs.
+- The embedded ERP in workshop-admin.html has been refreshed to match workshop-erp.html.
+
+Deployment:
+1. Replace the corresponding files in your GitHub repository with the versions in this ZIP.
+2. Commit and push the changes.
+3. Wait for Render to finish deploying, then reload the Telegram Mini App.
+4. Export and send a fresh PDF. Previously generated PDFs will not change.
+
+Validation performed locally: Python syntax, JavaScript syntax, embedded ERP synchronization, and ZIP integrity. Live Render/Supabase/Telegram delivery has not been tested from this environment.

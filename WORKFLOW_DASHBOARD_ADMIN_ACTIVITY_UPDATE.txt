@@ -1,0 +1,22 @@
+AMBAR WORKFLOW DASHBOARD + ADMIN ACTIVITY REPORT UPDATE
+
+WHAT CHANGED
+- Added a Workflow & Admin Activity page inside workshop-erp.html (the existing Workshop ERP interface).
+- Workflow dashboard displays live shared Workshop ERP orders grouped by production stage, using the existing server-synced order data.
+- Non-main-admin users see only stages permitted by their existing assignment. The dashboard does not change or overwrite admin assignments.
+- Main Admin sees the Admin Activity Report in the same page, with period filters (7/30/90/365 days), event totals, actor name, Telegram ID, timestamp, action, endpoint and status.
+- Added CSV export grouped by admin name.
+- Names are resolved from the existing /api/admin/roles endpoint. If an admin has no saved display name, the report uses “Admin <Telegram ID>”.
+- Existing bot endpoint already writes workshop_state_saved and workshop_state_reset security events. Other API activity depends on existing audit logging and available database records.
+
+DATABASE REQUIREMENT
+For persistent admin activity reporting, run amharic_bilingual_admin/admin_security_reports_migration.sql in the same Supabase project used by the Render deployment if it has not already been applied. Existing role assignments are read-only from this new report page. This update does not run SQL or connect to production.
+
+SAFETY / TEST STATUS
+- No Render deployment was performed.
+- No live database or business records were changed by preparing this ZIP.
+- JavaScript syntax checks passed for the inline scripts in workshop-erp.html; Python syntax check passed for bot.py.
+- Full live integration testing requires the user's Render/Supabase environment and credentials and has not been performed.
+
+PACKAGE
+This ZIP is based on the complete supplied project archive and retains the original project files. Only workshop-erp.html and this update note are added/changed by this package.

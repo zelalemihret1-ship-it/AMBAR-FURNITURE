@@ -1,0 +1,94 @@
+AMBAR Furniture Mini App + Workshop ERP
+
+IMPORTANT ACCESS FIX
+- Staff assigned only the `workshop_erp` permission can open Workshop ERP directly from Profile without being asked for the main admin emergency password.
+- The main admin continues to require the emergency admin password for protected owner actions and has full Workshop ERP access. Other admins can edit/delete only within functions assigned to them.
+- Server API requests validate signed Telegram identity and the active Workshop ERP role for staff; task-level writes are checked against the saved workshopAssignments.
+- The main admin confirms task assignments with Done in Workshop ERP > Admin & Staff. The server updates the real ambar_admin_roles permissions and the shared workshop_erp_state record.
+- Edit and Delete buttons are shown to admins assigned to the relevant Workshop ERP function. The server checks each delete against the admin’s saved function assignment; the main admin retains full access.
+
+DEPLOY
+1. Replace the matching files in the GitHub repository with this archive's files.
+2. Commit and push, then wait for Render to redeploy.
+3. In Admin Management, activate the staff account and select Workshop ERP.
+4. As main admin, open Workshop ERP > Admin & Staff, select at least one task, and click Done.
+5. Test from the staff account's Telegram Profile. The staff account should enter Workshop ERP without the emergency password prompt and should only see assigned sections.
+
+Existing Supabase table and environment settings are retained. No new database table is required for this access change.
+
+Delete-button fix (2026-10-23): The Workshop ERP runs inside a sandboxed iframe. The iframe now includes `allow-modals`, which permits the confirmation dialog used by Delete buttons; without it, the browser blocks `window.confirm()` and deletion cannot proceed. Main-admin-only delete authorization remains enforced by the backend.
+
+Edit/Delete permissions update (2026-10-23): Edit actions are now visible to assigned admins for work orders, finished goods, and materials. Delete actions are visible in supported record lists for assigned functions, including work orders, finished goods, materials, material movements, and sales. The backend independently checks the saved Workshop ERP function assignment before deleting.
+
+Sold-out workflow update (2026-10-23): When a finished unit is sold, its status changes to SOLD / INACTIVE FOR RESALE but it remains visible in Showroom Inventory and can still be opened for details. The sale form records customer name, customer phone, salesperson name, sale price, payment status, optional notes, and the sale time. Product details show the linked production workflow when available; Sales Archive and CSV export include payment status.
+
+
+Updates (2026-10-23)
+- Removed the sold-product explanatory message from the product details panel.
+- Added a Mark fully paid action for sold units that were recorded as Deposit paid or Pay later. It updates the product and matching sales record to Paid and records the payment update time.
+- Newly received/created showroom stock is inserted at the beginning of the inventory list.
+- New work orders default to Shoe Shelf; choose another category when needed.
+- Dashboard visibility now requires an explicit Dashboard assignment; other pages are hidden unless assigned.
+- Staff Workshop ERP accounts can have unique passwords set by the main admin in Admin & Staff. Passwords are PBKDF2-hashed in Supabase. Staff must have Workshop ERP permission and a task assignment.
+- Before deploying, run workshop_staff_password_migration.sql in Supabase.
+Section navigation fix (2026-10-23): Workshop ERP now displays only the currently selected category (Dashboard, Workshop Floor, Showroom Inventory, Raw Materials, Sales Archive, Reports, or Admin & Staff). Permission filtering no longer unhides every permitted section at once. The standalone and embedded ERP copies are kept synchronized.
+
+Emergency-session reliability fix (2026-10-23): Main-admin emergency sessions now use signed, time-limited tokens that can be validated across Render workers and ordinary process restarts, using SESSION_SIGNING_SECRET when configured or an existing stable server secret as fallback. The emergency password is still required to create a session. No Supabase tables, existing inventory, orders, sales, roles, or assignments are removed or reset. Session lifetime is 8 hours.
+
+Daily Reports & Analytics update: Reports now include a date selector and daily Sales Archive, Material Movements & Cut History, Production Stage Distribution, and Material Stock Health snapshot. Newly recorded sales and stage changes carry timestamps. Historical stock levels cannot be reconstructed for dates before snapshots were recorded. Daily snapshots are retained in the shared workshop state and JSON backups.
+
+
+Daily report selection + nested workshop permissions update (2026-10-23): The Daily Records by Date panel now has four selectable report buttons. Choose a date, tap Daily Sales Archive, Daily Material Movements & Cut History, Daily Production Stage Distribution, or Daily Material Stock Health, and only the selected report panel is shown. In Admin & Staff assignments, choosing Workshop Floor / Work Orders reveals multi-select checkboxes for Cutting & Prep, Assembly, Finishing / Spray, and In Stock. Staff assigned to specific production areas see only those stage columns in Workshop Floor. Existing assignments without area-specific choices continue to see all stages when Workshop Floor is assigned.
+
+
+## Granular Workshop ERP permissions (October 2026)
+The Admin & Staff assignment screen now groups selectable permissions by section: Workshop Floor / Work Orders, Showroom Inventory, Raw Materials, Sales Archive, Reports & Analytics, and Dashboard. Workshop areas (Cutting & Prep, Assembly, Finishing / Spray, In Stock) remain multi-select. Each section exposes separate task permissions for create/add, edit, advance stage, receive stock, cut/use material, and delete as appropriate. Edit and Delete controls are shown only when explicitly assigned, and the Flask API enforces the same granular permissions server-side. Raw Materials permissions separately control Add Material, Add/Receive Stock, Cut/Use Material, Edit Material Details, and Delete Material/Movement. No new database migration is required; assignments remain in the existing shared Workshop ERP state and admin role tables.
+
+The Materials section also exposes Edit Material Movement and Delete controls separately according to the assigned `materials_edit` and `materials_delete` permissions. Editing a movement recalculates stock and prevents negative stock totals.
+
+Dashboard KPI navigation update (2026-10-23): the four dashboard KPI cards are clickable. Active workshop orders opens assigned active production areas; High-priority orders opens high-priority active orders; Finished units available opens Showroom Inventory filtered to AVAILABLE; Materials to restock opens Raw Materials filtered to low stock. Section access and assigned production-area permissions are checked before navigation.
+
+Sold items archive and In Stock visibility update (2026-10-23): Showroom Inventory now separates available finished goods from a Sold Items Archive table with product ID, model, category, customer, phone, sold price, salesperson, payment status, sold date, and permission-aware actions. When a finished unit is marked SOLD, its linked work order is excluded from the In Stock production column and In Stock dashboard count while its historical work order remains saved. The sold item remains available for reference in the archive. This is a front-end view/state rule and does not require a database migration.
+
+Sold item restock: admins with the Edit finished units (inventory_edit) permission can use Restock in the Sold Items Archive or product details. Restocking returns the unit to available inventory and the In Stock production area; the historical sale remains in Sales Archive.
+
+Daily Records Excel export (2026-10-23): Daily Records by Date is now the first panel in Reports & Analytics. A quick-access button in the workspace header opens that section directly. Export Daily Report to Excel downloads an Excel-compatible workbook with separate worksheets for Daily Sales Archive, Material Movements & Cut History, Production Stage Distribution, and Material Stock Health for the selected date. Historical stock worksheet clearly notes when no snapshot exists.
+
+Daily report follow-up (2026-10-23): Report KPI cards (Recorded sales, Recorded sales value, Average sale, Available units) are clickable and open the corresponding Sales Archive or Showroom Inventory section. Sold-unit restocks create unique restock-history events with a unique RST ID, original sale details, restocked-by username, timestamp, and note. Daily Records includes a Restock Events category and Excel workbook sheet. Export prompts for the prepared-by username (pre-filled from the current app user) and optional recipient username/note; it downloads the workbook for the user to send manually and does not auto-send Telegram messages.
+
+Daily report enhancements (2026-10-23): report summary cards are clickable and navigate to Sales Archive or Showroom Inventory. Restocks now create unique RST event IDs with original sale details, username, time and note; the Daily Records selector and Excel export include a separate Restock Events table/sheet. Excel export prompts for the current Telegram username (pre-filled when available), optional recipient username and note, then downloads the report for manual sharing; it does not auto-send Telegram messages.
+
+
+Daily Excel report delivery
+---------------------------
+The Daily Records by Date export downloads an Excel-compatible .xls workbook and also posts it to /api/workshop/reports/send. The backend validates the Telegram identity and Workshop ERP session, checks Reports & Analytics permission, then uses Telegram sendDocument. Leave the recipient as “My Telegram account” to send to the currently signed-in admin. Existing admin accounts can be selected from the recipient list. To send to another person, enter their numeric Telegram chat/user ID; a username by itself cannot be used by Telegram Bot API to start a private conversation. The recipient must have started the AMBAR bot.
+
+Daily reports (Excel + PDF)
+- Daily Records by Date exports category-separated worksheets/tables for sales, material movements/cut usage, production stage events, daily material stock health, restock events, and timestamped operational actions grouped by category.
+- Excel-compatible .xls and PDF files can be downloaded and sent to a Telegram recipient from the export form.
+- PDF generation uses the reportlab package, included in requirements.txt.
+- Timestamped action capture begins after this version is deployed. Old activity strings that were stored without a timestamp cannot be reliably assigned to a historical date.
+
+
+Payment Waiting workflow: Showroom Inventory separates sold units with incomplete payment into Payment Waiting. Once marked fully paid, the item automatically moves to Sold Products. All such units remain SOLD/inactive until restocked.
+
+
+Daily report export update: Reports & Analytics now exports and sends PDF only. Excel export/sharing is removed. Restocked available products display a RESTOCKED tag and their details show the restock timestamp and note.
+
+Amharic and calendar update (October 2026)
+- Workshop ERP user-facing labels and daily PDF report headings are translated into Amharic where mapped.
+- Daily Records by Date includes a Gregorian date input and synchronized Ethiopian year/month/day selectors.
+- PDF export supports daily, weekly, monthly, and yearly periods; users can select whether the period is based on the Ethiopian or Gregorian calendar.
+- PDF reports use the bundled Noto Sans Ethiopic font. Keep NotoSansEthiopic-Regular.ttf in the project root when deploying.
+- PDF generation is available through the existing reportlab dependency.
+
+Bilingual interface and owner-only data management update (2026-10-23)
+- The Workshop ERP language toggle now supports English and Amharic in both directions. The selected language is remembered in the current browser.
+- Admin Controller includes Download Full JSON Backup, Upload & Restore Backup, inventory CSV export, and Reset All Data to Zero.
+- Backup download, backup restore, and reset are restricted to the main admin in the UI. The server reset endpoint also verifies the signed Telegram identity is the configured main admin.
+- Reset clears operational workshop data (work orders, products, materials, movements, sales, daily stock snapshots, restock history and activity records), resets the sequence counter, and preserves workshop staff assignments/permissions.
+- Reset requires typing RESET and a second confirmation. Take a full JSON backup before resetting.
+- New backend endpoint: POST /api/workshop/state/reset. No SQL migration is required; it updates the existing workshop_erp_state row.
+
+
+BUG FIX (2026-10-23): Fixed Daily Records production-stage filtering. renderDailyRecords previously referenced inRange, a helper local only to the PDF export function, causing a ReferenceError that was caught and incorrectly displayed as a shared-cloud connection failure. It now compares normalized date keys directly. workshop-admin.html embeds this same corrected ERP source.

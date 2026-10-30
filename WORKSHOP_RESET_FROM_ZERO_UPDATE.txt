@@ -1,0 +1,20 @@
+AMBAR WORKSHOP ERP — START FROM ZERO UPDATE
+
+Added a dedicated “Start Workshop ERP From Zero” danger-zone panel in the Workshop Admin area.
+
+Safety and behavior:
+- The reset button is shown in the Main Admin-only Workshop Admin page.
+- The browser requires typing RESET and a second confirmation.
+- The backend independently checks the authenticated Workshop session and Main Admin Telegram ID; direct API calls from other admins are rejected.
+- Clears shared Workshop ERP work orders, finished products/inventory, raw materials, material transactions, sales, daily stock snapshots, restock history, and activity logs.
+- Preserves Workshop ERP admin assignments/permissions so staff access does not get erased.
+- Deletes only financial ledger entries with source_ref matching workshop-sale:* (automatically generated from Workshop ERP sales). Manually entered financial ledger entries are preserved.
+- Does not change Mini App customer orders, Mini App catalog, Telegram configuration, or admin accounts.
+- Includes a “Download Workshop Backup First” action immediately beside the reset button.
+- If the shared Workshop ERP state reset succeeds but the separate finance cleanup fails, the API returns a warning so the Main Admin is informed.
+
+Validation performed locally:
+- Python syntax compilation passed for bot.py.
+- Node JavaScript syntax check passed for inline Workshop ERP scripts.
+- Duplicate HTML ID scan passed.
+- This is a code-package change only; it has not been deployed to Render or tested against the user's live Supabase project.

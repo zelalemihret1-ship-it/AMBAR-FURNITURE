@@ -1,0 +1,18 @@
+AMBAR Furniture V2 consolidated source validation
+Date: 2026-10-30
+
+PASS: python -m py_compile bot.py
+PASS: Node.js syntax check for inline scripts in every HTML file
+PASS: removed __pycache__ and .pyc from delivery archive
+
+NOT VERIFIED: SQL migrations against an actual Supabase schema
+NOT VERIFIED: Telegram bot connection or WebApp authentication
+NOT VERIFIED: Flask runtime and API/database integration
+NOT VERIFIED: end-to-end business workflows
+NOT VERIFIED: approval enforcement on all mutation routes
+NOT VERIFIED: finance reconciliation or monthly close
+NOT VERIFIED: customer favorites historical event tracking
+NOT VERIFIED: browser/mobile/Telegram UI regression
+NOT VERIFIED: backup and restore
+
+This archive is a consolidated staging development source, not a fully integrated or production-ready release.
