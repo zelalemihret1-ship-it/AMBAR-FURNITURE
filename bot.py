@@ -46,7 +46,7 @@ AMBAR_LOCATION_URL = "https://maps.app.goo.gl/fxCmYYKzLtYae5GeA"
 CHAPA_SECRET_KEY = os.getenv("CHAPA_SECRET_KEY", "").strip()
 CHAPA_WEBHOOK_SECRET = os.getenv("CHAPA_WEBHOOK_SECRET", "").strip()
 CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip().rstrip("/")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-miniapp.onrender.com/").strip()
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-dvit.onrender.com/").strip()
 BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "AMBAR_SALESBOT").strip().lstrip("@")
 REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "true").strip().lower() in {"1", "true", "yes", "on"}
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
@@ -664,28 +664,50 @@ def clean_text(value, limit, field, required=False):
 
 
 def validate_telegram_init_data(init_data):
-    """Validate Telegram Web App initData using Telegram's documented HMAC scheme."""
-    if not BOT_TOKEN or not init_data:
+    """Verify Telegram Mini App initData using the bot-token HMAC scheme.
+
+    Telegram may include a separate Ed25519 ``signature`` parameter for
+    third-party verification. It is not part of the bot-token HMAC data-check
+    string; only the signed fields (excluding hash/signature) are included.
+    """
+    if not BOT_TOKEN or not init_data or not isinstance(init_data, str):
         return False, None
     try:
-        pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
+        parsed = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True)
+        # Reject duplicate keys instead of silently accepting an ambiguous payload.
+        if len({key for key, _ in parsed}) != len(parsed):
+            log.warning("Telegram Mini App auth rejected: duplicate initData fields")
+            return False, None
+        pairs = dict(parsed)
         received_hash = pairs.pop("hash", None)
+        # The optional Telegram Web App signature is for the separate public-key
+        # validation flow and must not be included in this bot-token HMAC check.
+        pairs.pop("signature", None)
         if not received_hash or not re.fullmatch(r"[0-9a-f]{64}", received_hash):
+            log.warning("Telegram Mini App auth rejected: missing or malformed hash")
             return False, None
         auth_date = int(pairs.get("auth_date", "0"))
-        # Reject missing, future-dated, or stale initData (24-hour maximum age).
         now = int(time.time())
         if auth_date <= 0 or auth_date > now + 60 or now - auth_date > 86400:
+            log.warning("Telegram Mini App auth rejected: auth_date outside allowed window")
+            return False, None
+        if not pairs.get("user"):
+            log.warning("Telegram Mini App auth rejected: signed user field missing")
             return False, None
         data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(pairs.items()))
-        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-        calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
+        calculated = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(calculated, received_hash):
+            log.warning("Telegram Mini App auth rejected: HMAC mismatch (check V2 BOT_TOKEN belongs to the launching bot)")
             return False, None
         user = json.loads(pairs.get("user", "{}"))
         user_id = user.get("id")
-        return True, str(user_id) if user_id is not None else None
+        if user_id is None:
+            log.warning("Telegram Mini App auth rejected: signed user ID missing")
+            return False, None
+        return True, str(user_id)
     except (ValueError, TypeError, json.JSONDecodeError):
+        log.warning("Telegram Mini App auth rejected: malformed initData payload")
         return False, None
 
 
