@@ -21,7 +21,7 @@ try:
     from PIL import Image, ImageDraw, ImageFont, ImageOps
 except ImportError:  # image card falls back to the original product photo
     Image = ImageDraw = ImageFont = ImageOps = None
-from flask import Flask, g, jsonify, request, send_from_directory, send_file
+from flask import Flask, g, jsonify, request, send_from_directory, send_file, session
 from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp
 from telegram.ext import Application, CommandHandler, ContextTypes
 from werkzeug.utils import secure_filename
@@ -48,7 +48,8 @@ CHAPA_WEBHOOK_SECRET = os.getenv("CHAPA_WEBHOOK_SECRET", "").strip()
 CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip().rstrip("/")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-dvit.onrender.com/").strip()
 BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "AMBAR_SALESBOT").strip().lstrip("@")
-REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "true").strip().lower() in {"1", "true", "yes", "on"}
+REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "false").strip().lower() in {"1", "true", "yes", "on"}
+WEB_CUSTOMER_MODE = os.getenv("WEB_CUSTOMER_MODE", "true").strip().lower() in {"1", "true", "yes", "on"}
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
 
 CATEGORIES = ["Shoe Shelf", "Consul Table", "Center Table", "TV Stand", "Chest Drawer", "Dining Table", "Wardrobe", "Other"]
@@ -267,6 +268,15 @@ def product_image_upload_from_request(product_id, image, *, updating=False):
     return "/products/" + filename
 
 app = Flask(__name__, static_folder=None)
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SESSION_SIGNING_SECRET") or secrets.token_hex(32)
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=True, PERMANENT_SESSION_LIFETIME=dt.timedelta(days=30))
+
+def web_customer_id():
+    """Stable anonymous browser identity; grants customer functions only, never admin access."""
+    if not session.get("ambar_web_customer_id"):
+        session["ambar_web_customer_id"] = "web-" + secrets.token_urlsafe(18)
+        session.permanent = True
+    return session["ambar_web_customer_id"]
 
 
 def verified_telegram_admin():
@@ -728,10 +738,15 @@ def require_auth_from_request():
 
 
 def auth_result(init_data):
-    if not REQUIRE_TELEGRAM_AUTH:
-        return True, None
-    valid, user_id = validate_telegram_init_data(init_data)
-    return valid, user_id
+    """Accept verified Telegram identity inside Telegram, or a browser session outside it.
+
+    A supplied but invalid Telegram initData must never silently downgrade to a web guest.
+    """
+    if init_data:
+        return validate_telegram_init_data(init_data)
+    if not REQUIRE_TELEGRAM_AUTH and WEB_CUSTOMER_MODE:
+        return True, web_customer_id()
+    return False, None
 
 
 def telegram_username_from_init_data(init_data):
@@ -1152,6 +1167,9 @@ def api_health():
         "webapp_url_configured": bool(WEBAPP_URL),
         "supabase_configured": bool(supabase_enabled()),
         "telegram_auth_required": REQUIRE_TELEGRAM_AUTH,
+        "web_customer_mode": WEB_CUSTOMER_MODE,
+        "telegram_bot_optional": True,
+        "access_modes": ["telegram_mini_app", "independent_web_app"] if WEB_CUSTOMER_MODE else ["telegram_mini_app"],
     }), 200
 
 
@@ -2156,9 +2174,9 @@ def public_delivery_areas():
 
 @app.route("/api/my-app-state", methods=["GET", "PUT"])
 def my_app_state():
-    """Synchronize a customer's cart and favorites across devices using signed Telegram identity."""
+    """Synchronize cart and favorites for the current authenticated customer session."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data)
+    valid, user_id = auth_result(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to sync your account across devices."), 401
     if not supabase_enabled():
@@ -2287,7 +2305,7 @@ def admin_customer_favorites_report():
 def confirm_delivered_order(reference):
     """Let the authenticated customer confirm actual receipt even if staff have not yet marked Delivered."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data)
+    valid, user_id = auth_result(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to confirm delivery."), 401
     if not supabase_enabled():
@@ -2325,11 +2343,11 @@ def confirm_delivered_order(reference):
 @app.get("/api/my-orders")
 def my_orders():
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    # Order ownership must always come from Telegram's signed initData, even if
-    # REQUIRE_TELEGRAM_AUTH is disabled for local development elsewhere in the app.
-    valid, user_id = validate_telegram_init_data(init_data)
+    # Ownership is scoped to the signed browser session in web-only mode, or
+    # to Telegram's signed identity when Telegram authentication is enabled.
+    valid, user_id = auth_result(init_data)
     if not valid or not user_id:
-        return jsonify(error="Open AMBAR from its Telegram bot to view your orders. If you are already in Telegram, close and reopen the Mini App."), 401
+        return jsonify(error="Your customer session expired. Refresh the page and try again."), 401
     if not supabase_enabled():
         return jsonify(orders=[], configured=False)
     try:
@@ -2344,7 +2362,7 @@ def my_orders():
 def cancel_my_order(reference):
     """Allow a customer to cancel only their own order before preparation starts."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data)
+    valid, user_id = auth_result(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to manage your orders."), 401
     if not supabase_enabled():
@@ -4302,11 +4320,17 @@ def health():
 def authenticated_telegram_user():
     load_product_catalog()
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data)
+    valid, user_id = validate_telegram_init_data(init_data) if init_data else (False, None)
+    if not init_data and not REQUIRE_TELEGRAM_AUTH and WEB_CUSTOMER_MODE:
+        user_id = web_customer_id()
+        safe_user = {"id": user_id, "first_name": "AMBAR", "last_name": "Customer", "username": "", "language_code": "en", "photo_url": ""}
+        return jsonify(authenticated=True, user=safe_user, is_admin=False, admin_permissions=[],
+                       has_main_admin_access=False, has_workshop_access=False, workshop_only_role=False,
+                       auth_mode="web_guest"), 200
     if not valid or not user_id:
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_or_missing_telegram_auth"})
-        return jsonify(authenticated=False, error="Telegram authentication failed. Open the Mini App from the AMBAR Telegram bot.", error_code="telegram_init_data_invalid_or_missing"), 401
+        return jsonify(authenticated=False, error="Customer sign-in could not be started. Please refresh the page.", error_code="customer_session_unavailable"), 401
     try:
         pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
         user = json.loads(pairs.get("user", "{}"))
