@@ -4343,6 +4343,30 @@ def authenticated_telegram_user():
         "language_code": clean_text(user.get("language_code", ""), 20, "Language"),
         "photo_url": clean_text(user.get("photo_url", ""), 2000, "Profile photo URL"),
     }
+    # Reconnect the verified Telegram identity to its existing AMBAR customer
+    # profile. Never match by name or accept a customer ID from the browser.
+    saved_customer_profile = None
+    if supabase_enabled():
+        try:
+            profile_rows = supabase_request("GET", "/rest/v1/customer_profiles", params={
+                "select": "customer_id,full_name,phone,location,telegram_user_id,telegram_username,customer_type,customer_status",
+                "telegram_user_id": f"eq.{user_id}", "limit": "2"
+            }) or []
+            if len(profile_rows) == 1:
+                row = profile_rows[0]
+                saved_customer_profile = {
+                    "customer_id": clean_text(row.get("customer_id", ""), 80, "Customer ID"),
+                    "full_name": clean_text(row.get("full_name", ""), 100, "Customer name"),
+                    "phone": clean_text(row.get("phone", ""), 50, "Customer phone"),
+                    "location": clean_text(row.get("location", ""), 500, "Customer location"),
+                    "telegram_username": clean_text(row.get("telegram_username", ""), 100, "Telegram username"),
+                    "customer_type": clean_text(row.get("customer_type", ""), 40, "Customer type"),
+                    "customer_status": clean_text(row.get("customer_status", ""), 40, "Customer status"),
+                }
+            elif len(profile_rows) > 1:
+                log.error("Multiple customer profiles are linked to verified Telegram ID %s; profile autofill skipped", user_id)
+        except Exception:
+            log.exception("Could not load saved customer profile for verified Telegram ID %s", user_id)
     # Show the admin entry point to the owner and any active staff account saved
     # in Supabase. Staff do not need to be added to the Render allowlist.
     is_owner = is_main_admin_user(user_id)
@@ -4360,7 +4384,7 @@ def authenticated_telegram_user():
     has_main_admin_access = bool(is_admin and (is_owner or "*" in effective_permissions or non_workshop_permissions))
     has_workshop_access = bool(is_admin and (is_owner or "*" in effective_permissions or "workshop_erp" in effective_permissions))
     workshop_only_role = bool(has_workshop_access and not has_main_admin_access)
-    return jsonify(authenticated=True, user=safe_user, is_admin=is_admin,
+    return jsonify(authenticated=True, user=safe_user, customer_profile=saved_customer_profile, is_admin=is_admin,
                    admin_permissions=permissions if is_admin else [],
                    has_main_admin_access=has_main_admin_access,
                    has_workshop_access=has_workshop_access,
