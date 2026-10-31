@@ -1,200 +1,898 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full select-none">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#f7f3ee">
-<title>AMBAR Furniture — Order Mini App</title>
-<style>
-:root{--bg:#f7f3ee;--surface:#fffdfa;--surface2:#eee5db;--text:#28231f;--muted:#82766c;--line:#e6dcd1;--accent:#80583e;--accent2:#60412f;--accentText:#fffaf5;--shadow:0 8px 24px rgba(64,42,25,.07)}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:15px;line-height:1.45;transition:background .2s,color .2s}
-body.dark{--bg:#171513;--surface:#24211e;--surface2:#302a25;--text:#f4eee8;--muted:#b4a69a;--line:#40372f;--accent:#c49a77;--accent2:#d6b08e;--accentText:#211811;--shadow:0 8px 24px rgba(0,0,0,.18)}
-button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #b68b68;outline-offset:2px}
-.app{max-width:1040px;margin:0 auto;padding:0 18px 100px}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 0 14px}
-.brand{display:flex;align-items:center;gap:10px;min-width:0}.brand-mark{width:44px;height:44px;border-radius:14px;background:var(--accent);color:var(--accentText);display:grid;place-items:center;font-weight:850;font-size:17px;letter-spacing:-1px;flex-shrink:0}.brand-name{font-weight:800;letter-spacing:.04em;font-size:16px}.brand-sub{font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
-.top-actions{display:flex;gap:8px}.icon-btn{width:42px;height:42px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--text);display:grid;place-items:center;font-size:18px;position:relative}.badge{position:absolute;right:-4px;top:-4px;background:var(--accent);color:var(--accentText);font-size:10px;min-width:17px;height:17px;padding:0 4px;border-radius:20px;display:grid;place-items:center}
-.view{display:none}.view.active{display:block}
-.hero{position:relative;overflow:hidden;border-radius:24px;background:linear-gradient(110deg,#e5d2be,#c6a88e);min-height:225px;padding:26px 24px;display:flex;align-items:center;margin-bottom:25px;color:#30251d}
-.hero-copy{position:relative;z-index:2;max-width:60%}.eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;margin-bottom:9px;color:#76543c}.hero h1{font-size:clamp(25px,4vw,39px);line-height:1.08;letter-spacing:-.045em;margin:0 0 11px;max-width:380px}.hero p{font-size:13px;line-height:1.5;color:#5f4a3a;max-width:300px;margin:0 0 18px}.primary{border:0;background:var(--accent);color:var(--accentText);border-radius:12px;padding:12px 17px;font-weight:750;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px}.hero .primary{background:#30251d;color:#fff8f0}.hero-art{position:absolute;right:-3%;bottom:-15%;width:47%;height:115%;display:grid;place-items:center}.hero-art svg{width:100%;height:100%;max-height:290px}
-.section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:22px 0 13px}.section-head h2{margin:0;font-size:21px;letter-spacing:-.035em}.section-head p{margin:4px 0 0;font-size:12px;color:var(--muted)}.text-btn{border:0;background:transparent;color:var(--accent);font-weight:750;padding:8px 0}
-.searchbox{display:flex;align-items:center;gap:9px;padding:0 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;height:48px;margin:0 0 15px}.searchbox span{font-size:18px;color:var(--muted)}.searchbox input{width:100%;border:0;outline:0;background:transparent;color:var(--text);font-size:14px}
-.categories{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}.categories::-webkit-scrollbar{display:none}.chip{white-space:nowrap;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:100px;padding:9px 14px;font-size:12px;font-weight:700}.chip.active{background:var(--accent);color:var(--accentText);border-color:var(--accent)}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.product{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;min-width:0;box-shadow:0 2px 8px rgba(55,37,23,.025)}.product-image{position:relative;aspect-ratio:1.15;background:var(--surface2);overflow:hidden;display:grid;place-items:center}.product-image svg{width:100%;height:100%;display:block}.heart{position:absolute;right:10px;top:10px;width:34px;height:34px;border:0;border-radius:50%;background:var(--surface);color:var(--text);font-size:17px;box-shadow:0 2px 8px #00000012}.heart.selected{color:#b34e48}.product-info{padding:13px}.product-category{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:750}.product h3{font-size:14px;line-height:1.3;margin:5px 0 7px}.product-bottom{display:flex;align-items:center;justify-content:space-between;gap:7px}.price{font-size:14px;font-weight:850;white-space:nowrap}.add-btn{border:0;border-radius:10px;background:var(--surface2);color:var(--text);font-weight:800;width:35px;height:35px;font-size:21px;flex-shrink:0}.empty{padding:35px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px;grid-column:1/-1}
-.info-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:24px 0}.info-item{border:1px solid var(--line);border-radius:15px;padding:14px 12px;background:var(--surface)}.info-item strong{display:block;font-size:12px;margin-top:7px}.info-item span{font-size:11px;color:var(--muted)}.info-icon{font-size:20px}
-.page-title{padding:16px 0 22px}.page-title h1{font-size:29px;letter-spacing:-.04em;margin:0 0 5px}.page-title p{margin:0;color:var(--muted);font-size:13px}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}.panel h2{font-size:17px;margin:0 0 14px}.field{display:grid;gap:6px;margin-bottom:13px}.field label{font-size:12px;font-weight:750;color:var(--muted)}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:11px;padding:12px;background:var(--bg);color:var(--text);min-height:45px}.field textarea{min-height:82px;resize:vertical}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wide{width:100%}.muted{color:var(--muted)}.notice{background:var(--surface2);border-radius:12px;padding:12px;font-size:12px;color:var(--muted);margin:10px 0 15px}
-.order-line{display:flex;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}.mini-thumb{width:66px;height:62px;border-radius:12px;background:var(--surface2);flex-shrink:0;display:grid;place-items:center;overflow:hidden}.mini-thumb svg{width:100%;height:100%}.order-line-main{flex:1;min-width:0}.order-line-main strong{display:block;font-size:13px}.order-line-main small{color:var(--muted);font-size:11px}.qty{display:flex;align-items:center;gap:9px}.qty button{width:28px;height:28px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);color:var(--text)}.remove{border:0;background:transparent;color:var(--muted);padding:5px}.total-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;font-size:14px}.total-row strong{font-size:20px}
-.bottom-nav{position:fixed;z-index:20;bottom:0;left:0;right:0;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 94%,transparent);border-top:1px solid var(--line);backdrop-filter:blur(16px)}.nav-inner{max-width:650px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.nav-btn{border:0;background:transparent;color:var(--muted);border-radius:12px;padding:7px 4px 5px;display:flex;align-items:center;justify-content:center;gap:3px;flex-direction:column;font-size:10px;font-weight:700;min-height:49px}.nav-btn .nav-icon{font-size:19px;line-height:1.1}.nav-btn.active{color:var(--accent);background:var(--surface2)}
-.toast{position:fixed;z-index:50;left:50%;bottom:92px;transform:translate(-50%,12px);opacity:0;pointer-events:none;background:var(--text);color:var(--bg);border-radius:12px;padding:11px 16px;font-size:13px;box-shadow:var(--shadow);transition:.2s;max-width:90%;text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
-.modal-backdrop{position:fixed;inset:0;background:#17110dcc;z-index:40;display:none;align-items:flex-end;justify-content:center;padding:14px}.modal-backdrop.open{display:flex}.modal{width:min(520px,100%);max-height:90%;overflow:auto;background:var(--surface);color:var(--text);border-radius:22px;padding:20px}.modal-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.modal-head h2{margin:0;font-size:20px}.close-btn{border:1px solid var(--line);background:var(--surface2);color:var(--text);width:38px;height:38px;border-radius:12px;font-size:20px}.modal-art{height:210px;border-radius:15px;background:var(--surface2);overflow:hidden;margin:15px 0}.modal-art svg{width:100%;height:100%}
-footer{color:var(--muted);font-size:11px;text-align:center;padding:26px 0 10px}
-@media(min-width:760px){.app{padding-left:28px;padding-right:28px}.hero{min-height:275px;padding:35px}.product-image{aspect-ratio:1.25}.grid{gap:18px}.product-info{padding:15px}.hero-copy{max-width:52%}}
-@media(max-width:560px){.app{padding-left:13px;padding-right:13px}.topbar{padding-top:14px}.brand-mark{width:40px;height:40px}.hero{min-height:220px;padding:21px 17px;border-radius:20px}.hero-copy{max-width:66%}.hero h1{font-size:28px}.hero p{font-size:12px}.hero-art{right:-18%;width:61%;opacity:.9}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.product-info{padding:10px}.product h3{font-size:13px}.product-bottom{align-items:center}.price{font-size:13px}.add-btn{width:32px;height:32px}.info-strip{gap:7px}.info-item{padding:11px 8px}.info-item strong{font-size:11px}.info-item span{font-size:10px}.two-col{grid-template-columns:1fr;gap:0}.page-title h1{font-size:26px}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Furniture Telegram Mini App</title>
+  
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            orange: {
+              50: '#fff7ed',
+              100: '#ffedd5',
+              200: '#fed7aa',
+              500: '#f97316',
+              600: '#ea580c',
+              700: '#c2410c',
+            },
+            tg: {
+              bg: 'var(--tg-theme-bg-color, #ffffff)',
+              text: 'var(--tg-theme-text-color, #111827)',
+              hint: 'var(--tg-theme-hint-color, #9ca3af)',
+              link: 'var(--tg-theme-link-color, #ea580c)',
+              button: 'var(--tg-theme-button-color, #ea580c)',
+              buttonText: 'var(--tg-theme-button-text-color, #ffffff)',
+              secondaryBg: 'var(--tg-theme-secondary-bg-color, #f9fafb)',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    body {
+      background-color: var(--tg-theme-secondary-bg-color, #f9fafb);
+      color: var(--tg-theme-text-color, #111827);
+      -webkit-tap-highlight-color: transparent;
+    }
+    ::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    [contenteditable="true"]:focus {
+      outline: 2px solid #ea580c;
+      background-color: rgba(234, 88, 12, 0.05);
+      border-radius: 6px;
+    }
+
+    .active-scale:active {
+      transform: scale(0.96);
+    }
+
+    .sheet-transition {
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  </style>
 </head>
-<body>
-<div class="app">
-  <header class="topbar">
-    <div class="brand"><div class="brand-mark" aria-label="AMBAR logo">A</div><div><div class="brand-name">AMBAR FURNITURE</div><div class="brand-sub" data-en="Crafted for comfort" data-am="ለምቾት የተሰራ">Crafted for comfort</div></div></div>
-    <div class="top-actions">
-      <button class="icon-btn" id="languageBtn" aria-label="Change language" title="Language">文</button>
-      <button class="icon-btn" id="themeBtn" aria-label="Toggle theme" title="Theme">☾</button>
-      <button class="icon-btn" id="headerFav" aria-label="Favorites" title="Favorites">♡<span class="badge" id="favBadge" hidden>0</span></button>
+<body class="h-full flex flex-col font-sans pb-24 antialiased">
+
+  <!-- ==================== TOP NAVIGATION / HEADER ==================== -->
+  <header class="sticky top-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-orange-100 dark:border-gray-800 px-4 py-3 shadow-sm">
+    <div class="flex items-center justify-between gap-3 max-w-md mx-auto">
+      
+      <!-- TG User Profile Info -->
+      <div class="flex items-center gap-2.5">
+        <div id="userAvatar" class="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white flex items-center justify-center font-bold text-sm shadow-md">
+          U
+        </div>
+        <div class="flex flex-col">
+          <span id="userName" class="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate max-w-[130px]">
+            Hello, Guest
+          </span>
+          <span class="text-[10px] text-orange-600 font-medium flex items-center gap-1">
+            <i class="fa-solid fa-bolt text-[9px]"></i> Telegram Mini App
+          </span>
+        </div>
+      </div>
+
+      <!-- Actions: Favorite & Cart Indicator -->
+      <div class="flex items-center gap-2">
+        <button onclick="toggleFavoritesFilter()" id="favToggleBtn" class="w-9 h-9 rounded-full bg-orange-50 text-gray-700 flex items-center justify-center relative active-scale transition-colors">
+          <i id="favIcon" class="fa-regular fa-heart text-sm"></i>
+          <span id="favBadge" class="hidden absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+        </button>
+
+        <button onclick="openCartSheet()" class="w-9 h-9 rounded-full bg-orange-500 text-white flex items-center justify-center relative active-scale shadow-md shadow-orange-500/20">
+          <i class="fa-solid fa-bag-shopping text-sm"></i>
+          <span id="cartBadge" class="absolute -top-1 -right-1 bg-gray-900 text-white text-[9px] font-extrabold px-1.5 py-0.2 min-w-[16px] h-4 rounded-full flex items-center justify-center">0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Search Bar -->
+    <div class="mt-2.5 max-w-md mx-auto relative">
+      <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+      <input 
+        type="text" 
+        id="searchInput"
+        placeholder="Search furniture, tables, chairs..." 
+        class="w-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-full pl-9 pr-8 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all placeholder:text-gray-400"
+        oninput="handleSearch()"
+      >
+      <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Category Pills Bar -->
+    <div class="mt-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar py-1 max-w-md mx-auto" id="categoryContainer">
+      <!-- Dynamic Categories -->
     </div>
   </header>
 
-  <main>
-    <section class="view active" id="homeView">
-      <div class="hero">
-        <div class="hero-copy"><div class="eyebrow" data-en="Made for your home" data-am="ለቤትዎ የተዘጋጀ">MADE FOR YOUR HOME</div><h1 data-en="Furniture that feels like home." data-am="ቤት የሚያስመስል ፈርኒቸር።">Furniture that feels like home.</h1><p data-en="Thoughtful design. Everyday comfort. Made with care." data-am="ዘመናዊ ዲዛይን። የዕለት ተዕለት ምቾት።">Thoughtful design. Everyday comfort. Made with care.</p><button class="primary" id="exploreBtn"><span data-en="Explore collection" data-am="ምርቶችን ይመልከቱ">Explore collection</span> <span>↗</span></button></div>
-        <div class="hero-art" aria-hidden="true"><svg viewBox="0 0 300 260"><ellipse cx="163" cy="222" rx="116" ry="17" fill="#87674f" opacity=".22"/><path d="M63 130 Q63 110 82 110 H220 Q237 110 237 130 V187 H63Z" fill="#80583e"/><rect x="54" y="119" width="28" height="78" rx="10" fill="#60412f"/><rect x="220" y="119" width="28" height="78" rx="10" fill="#60412f"/><rect x="79" y="91" width="141" height="64" rx="14" fill="#a77c59"/><rect x="91" y="101" width="58" height="45" rx="9" fill="#d6b99c"/><rect x="154" y="101" width="54" height="45" rx="9" fill="#c6a184"/><path d="M73 188 L68 223 M230 188 L236 223" stroke="#4f3728" stroke-width="9" stroke-linecap="round"/><path d="M35 224 H267" stroke="#9b7b61" stroke-width="3" stroke-linecap="round"/><path d="M83 110 Q85 76 105 71 Q128 67 132 91" fill="none" stroke="#f1e4d5" stroke-width="4" opacity=".7"/></svg></div>
+
+  <!-- ==================== MAIN CONTENT CATALOG ==================== -->
+  <main class="flex-grow px-4 pt-4 max-w-md mx-auto w-full space-y-4">
+    
+    <!-- Hero Editable Promo Banner -->
+    <div class="relative rounded-2xl overflow-hidden bg-gradient-to-r from-orange-600 to-amber-500 p-4 text-white shadow-lg shadow-orange-500/15">
+      <div class="relative z-10 max-w-[70%] space-y-1">
+        <span class="inline-block bg-white/20 backdrop-blur-md text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+          Telegram Special
+        </span>
+        <h2 contenteditable="true" onblur="triggerHaptic('light')" class="font-display font-extrabold text-lg leading-tight focus:bg-white/20 p-0.5">
+          Modern Living 2026 Collection
+        </h2>
+        <p contenteditable="true" onblur="triggerHaptic('light')" class="text-[11px] text-orange-100 opacity-90 line-clamp-2 focus:bg-white/20 p-0.5">
+          Tap any text or element to live-edit items in this Telegram app!
+        </p>
       </div>
-      <div class="searchbox"><span>⌕</span><input id="searchInput" type="search" placeholder="Search furniture..." aria-label="Search furniture"></div>
-      <div class="section-head"><div><h2 data-en="Shop by category" data-am="በዓይነት ይምረጡ">Shop by category</h2><p data-en="Find the right piece for your space" data-am="ለቤትዎ የሚስማማውን ይምረጡ">Find the right piece for your space</p></div></div>
-      <div class="categories" id="categories"></div>
-      <div class="section-head"><div><h2 id="productHeading" data-en="Popular furniture" data-am="ተወዳጅ ፈርኒቸሮች">Popular furniture</h2><p data-en="Explore our featured designs" data-am="የተመረጡ ዲዛይኖቻችንን ይመልከቱ">Explore our featured designs</p></div><button class="text-btn" id="seeAllBtn" data-en="See all →" data-am="ሁሉንም →">See all →</button></div>
-      <div class="grid" id="productGrid"></div>
-      <div class="info-strip"><div class="info-item"><div class="info-icon">✦</div><strong data-en="Made with care" data-am="በጥንቃቄ የተሰራ">Made with care</strong><span data-en="Quality craftsmanship" data-am="ጥራት ያለው ስራ">Quality craftsmanship</span></div><div class="info-item"><div class="info-icon">⌂</div><strong data-en="Made for you" data-am="ለእርስዎ የተሰራ">Made for you</strong><span data-en="Custom options" data-am="የግል ዲዛይን">Custom options</span></div><div class="info-item"><div class="info-icon">♡</div><strong data-en="Timeless design" data-am="ዘላቂ ውበት">Timeless design</strong><span data-en="Comfort meets style" data-am="ምቾት ከውበት ጋር">Comfort meets style</span></div></div>
-    </section>
+      <i class="fa-solid fa-couch absolute -right-3 -bottom-3 text-7xl text-white/20 rotate-[-10deg]"></i>
+    </div>
 
-    <section class="view" id="favoritesView"><div class="page-title"><h1 data-en="Your favorites" data-am="የመረጧቸው">Your favorites</h1><p data-en="The pieces you love, all in one place." data-am="የወደዷቸው ምርቶች በአንድ ቦታ።">The pieces you love, all in one place.</p></div><div class="grid" id="favoritesGrid"></div></section>
+    <!-- Admin Controls Bar: Add New Item -->
+    <div class="flex items-center justify-between pt-1">
+      <div class="flex items-center gap-2">
+        <h3 class="font-display font-bold text-sm text-gray-900 dark:text-white">Catalog</h3>
+        <span id="catalogCount" class="text-[10px] text-gray-400 font-medium">(0 items)</span>
+      </div>
 
-    <section class="view" id="orderView"><div class="page-title"><h1 data-en="Your order" data-am="ትዕዛዝዎ">Your order</h1><p data-en="Review your selection before sending an order request." data-am="ትዕዛዝዎን ከመላክዎ በፊት ይመልከቱ።">Review your selection before sending an order request.</p></div>
-      <div class="panel"><h2 data-en="Selected furniture" data-am="የመረጡት ፈርኒቸር">Selected furniture</h2><div id="orderItems"></div><div class="total-row"><span data-en="Estimated total" data-am="ግምታዊ ድምር">Estimated total</span><strong id="orderTotal">ETB 0</strong></div><div class="notice" data-en="This is an order request interface. Final price, availability and delivery will be confirmed by AMBAR Furniture." data-am="ይህ የትዕዛዝ መላኪያ በይነገጽ ነው። የመጨረሻ ዋጋ፣ ክምችት እና መላኪያ በአምባር ፈርኒቸር ይረጋገጣሉ።">This is an order request interface. Final price, availability and delivery will be confirmed by AMBAR Furniture.</div></div>
-      <form id="orderForm" class="panel"><h2 data-en="Customer details" data-am="የደንበኛ መረጃ">Customer details</h2><div class="two-col"><div class="field"><label for="customerName" data-en="Full name *" data-am="ሙሉ ስም *">Full name *</label><input id="customerName" name="name" required autocomplete="name" placeholder="Your name"></div><div class="field"><label for="customerPhone" data-en="Phone number *" data-am="ስልክ ቁጥር *">Phone number *</label><input id="customerPhone" name="phone" required type="tel" autocomplete="tel" placeholder="+251 9..."></div></div><div class="field"><label for="customerAddress" data-en="Delivery address *" data-am="የመላኪያ አድራሻ *">Delivery address *</label><input id="customerAddress" name="address" required autocomplete="street-address" placeholder="Area, city, landmark"></div><div class="field"><label for="deliveryNotes" data-en="Notes (optional)" data-am="ተጨማሪ ማስታወሻ (አማራጭ)">Notes (optional)</label><textarea id="deliveryNotes" name="notes" placeholder="Color, size, custom requests..."></textarea></div><button class="primary wide" type="submit" data-en="Submit order request →" data-am="ትዕዛዝ ይላኩ →">Submit order request →</button><p class="muted" style="font-size:11px;margin:10px 0 0" data-en="Demo only: this page does not send customer data to a server yet." data-am="ማሳያ ብቻ፦ ይህ ገጽ ገና መረጃን ወደ ሰርቨር አይልክም።">Demo only: this page does not send customer data to a server yet.</p></form>
-    </section>
+      <button onclick="addNewFurnitureItem()" class="bg-orange-100 dark:bg-gray-800 text-orange-600 dark:text-orange-400 hover:bg-orange-200 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 active-scale transition-colors">
+        <i class="fa-solid fa-plus text-[10px]"></i>
+        <span>Add Furniture</span>
+      </button>
+    </div>
 
-    <section class="view" id="trackView"><div class="page-title"><h1 data-en="Track your order" data-am="ትዕዛዝዎን ይከታተሉ">Track your order</h1><p data-en="Check your order status using your order reference." data-am="የትዕዛዝ ሁኔታን በትዕዛዝ ቁጥር ይመልከቱ።">Check your order status using your order reference.</p></div><form id="trackForm" class="panel"><div class="field"><label for="orderRef" data-en="Order reference" data-am="የትዕዛዝ ቁጥር">Order reference</label><input id="orderRef" placeholder="e.g. AMB-1024" required></div><button class="primary wide" type="submit" data-en="Check status" data-am="ሁኔታውን ይመልከቱ">Check status</button><div id="trackResult" aria-live="polite"></div></form><div class="panel"><h2 data-en="Need help?" data-am="እርዳታ ይፈልጋሉ?">Need help?</h2><p class="muted" style="font-size:13px" data-en="Contact AMBAR Furniture to confirm an order or ask about delivery." data-am="ትዕዛዝዎን ለማረጋገጥ ወይም ስለ መላኪያ ለመጠየቅ አምባር ፈርኒቸርን ያግኙ።">Contact AMBAR Furniture to confirm an order or ask about delivery.</p></div></section>
+    <!-- Furniture Cards Grid -->
+    <div id="productGrid" class="grid grid-cols-2 gap-3">
+      <!-- Dynamic Furniture Items Injected Here -->
+    </div>
 
-    <section class="view" id="aboutView"><div class="page-title"><h1 data-en="About AMBAR" data-am="ስለ አምባር">About AMBAR</h1><p data-en="Crafted for comfort. Designed for living." data-am="ለምቾት የተሰራ። ለኑሮ የተነደፈ።">Crafted for comfort. Designed for living.</p></div><div class="panel"><div class="brand" style="margin-bottom:14px"><div class="brand-mark">A</div><div><div class="brand-name">AMBAR FURNITURE</div><div class="brand-sub">Crafted for comfort</div></div></div><p class="muted" data-en="We create furniture that brings comfort, thoughtful design and everyday function into your home. Browse our collection or ask about a custom piece made for your space." data-am="ምቾትን፣ ዘመናዊ ዲዛይንን እና ተግባራዊነትን ወደ ቤትዎ የሚያመጣ ፈርኒቸር እንሰራለን። ምርቶቻችንን ይመልከቱ ወይም ለቦታዎ የሚስማማ ብጁ ዲዛይን ይጠይቁ።">We create furniture that brings comfort, thoughtful design and everyday function into your home. Browse our collection or ask about a custom piece made for your space.</p><button class="primary" id="aboutShopBtn" data-en="Browse furniture →" data-am="ፈርኒቸር ይመልከቱ →">Browse furniture →</button></div></section>
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden py-12 text-center space-y-3">
+      <div class="w-12 h-12 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mx-auto text-xl">
+        <i class="fa-solid fa-chair"></i>
+      </div>
+      <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">No furniture found</p>
+      <button onclick="resetFilters()" class="text-xs text-orange-600 font-bold underline">Reset Filters</button>
+    </div>
   </main>
-  <footer>AMBAR FURNITURE · <span data-en="Designed for living" data-am="ለኑሮ የተነደፈ">Designed for living</span></footer>
-</div>
 
-<nav class="bottom-nav" aria-label="Main navigation"><div class="nav-inner">
-  <button class="nav-btn active" data-view="homeView"><span class="nav-icon">⌂</span><span data-en="Home" data-am="መነሻ">Home</span></button>
-  <button class="nav-btn" data-view="favoritesView"><span class="nav-icon">♡</span><span data-en="Favorites" data-am="የወደዷቸው">Favorites</span></button>
-  <button class="nav-btn" data-view="orderView"><span class="nav-icon">▤</span><span data-en="Order" data-am="ትዕዛዝ">Order</span><span class="badge" id="cartBadge" hidden>0</span></button>
-  <button class="nav-btn" data-view="trackView"><span class="nav-icon">◷</span><span data-en="Track order" data-am="ክትትል">Track order</span></button>
-</div></nav>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="modal-backdrop" id="productModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal"><div class="modal-head"><h2 id="modalTitle">Product details</h2><button class="close-btn" id="closeModal" aria-label="Close">×</button></div><div id="modalContent"></div></div></div>
 
-<script>
-(function(){
-const products=[
-{id:1,name:"Oak Dining Table",category:"Dining",price:28500,kind:"table",desc:"A clean-lined dining table designed for everyday meals and gatherings."},
-{id:2,name:"Comfort Lounge Sofa",category:"Sofas",price:42000,kind:"sofa",desc:"A welcoming lounge sofa with generous cushions and a warm, timeless look."},
-{id:3,name:"Modern Shoe Cabinet",category:"Storage",price:12500,kind:"cabinet",desc:"A practical entryway cabinet to keep shoes organised and out of sight."},
-{id:4,name:"Minimal Wardrobe",category:"Storage",price:36500,kind:"wardrobe",desc:"Simple, spacious storage with a calm contemporary finish."},
-{id:5,name:"Upholstered Bed",category:"Bedroom",price:39500,kind:"bed",desc:"A comfortable bed frame with a soft upholstered headboard."},
-{id:6,name:"Wooden Coffee Table",category:"Living",price:9800,kind:"coffee",desc:"A compact coffee table with a natural wood-inspired finish."},
-{id:7,name:"Bedside Table",category:"Bedroom",price:6500,kind:"night",desc:"A useful bedside companion with a neat, minimal silhouette."},
-{id:8,name:"Custom Furniture",category:"Custom",price:0,kind:"custom",desc:"Tell us what you have in mind and request a custom furniture design."}
-];
-const categories=["All","Sofas","Dining","Bedroom","Storage","Living","Custom"];
-let selectedCategory="All", favorites=new Set(), cart=new Map(), currentLang="en", currentProduct=null;
-const $=id=>document.getElementById(id);
-const money=n=>n===0?"Request a quote":"ETB "+n.toLocaleString("en-US");
-function furnitureSVG(kind){
-const common='<defs><linearGradient id="wood" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#bc9068"/><stop offset="1" stop-color="#80583e"/></linearGradient><linearGradient id="cloth" x1="0" x2="1"><stop stop-color="#d7c0a7"/><stop offset="1" stop-color="#aa8c70"/></linearGradient></defs><ellipse cx="150" cy="205" rx="100" ry="10" fill="#6f513b" opacity=".14"/>';
-let art="";
-if(kind==="sofa") art='<rect x="48" y="107" width="204" height="69" rx="17" fill="url(#cloth)"/><rect x="59" y="80" width="182" height="62" rx="18" fill="#b59a80"/><rect x="68" y="91" width="80" height="47" rx="10" fill="#d7c0a7"/><rect x="153" y="91" width="77" height="47" rx="10" fill="#c5a98c"/><rect x="38" y="111" width="26" height="66" rx="10" fill="#80583e"/><rect x="236" y="111" width="26" height="66" rx="10" fill="#80583e"/><path d="M65 176v23M235 176v23" stroke="#60412f" stroke-width="8" stroke-linecap="round"/>';
-else if(kind==="table") art='<path d="M62 111H238L222 137H78Z" fill="#c59a70"/><rect x="67" y="104" width="166" height="16" rx="4" fill="url(#wood)"/><path d="M88 120l-8 78M212 120l8 78" stroke="#80583e" stroke-width="11" stroke-linecap="round"/><path d="M79 156h142" stroke="#a77c59" stroke-width="4"/>';
-else if(kind==="cabinet") art='<rect x="77" y="57" width="146" height="139" rx="5" fill="url(#wood)"/><rect x="87" y="68" width="60" height="116" rx="2" fill="#f0e8de"/><rect x="153" y="68" width="60" height="116" rx="2" fill="#e5d7c7"/><path d="M150 68v116" stroke="#80583e" stroke-width="5"/><circle cx="139" cy="125" r="2.8" fill="#80583e"/><circle cx="161" cy="125" r="2.8" fill="#80583e"/><path d="M87 187h126" stroke="#60412f" stroke-width="8"/>';
-else if(kind==="wardrobe") art='<rect x="78" y="43" width="144" height="156" rx="4" fill="url(#wood)"/><rect x="88" y="54" width="59" height="132" fill="#e6d7c6"/><rect x="153" y="54" width="59" height="132" fill="#d8c2ac"/><path d="M150 54v132" stroke="#80583e" stroke-width="4"/><circle cx="139" cy="122" r="3" fill="#80583e"/><circle cx="163" cy="122" r="3" fill="#80583e"/><path d="M89 190v9M211 190v9" stroke="#60412f" stroke-width="7"/>';
-else if(kind==="bed") art='<rect x="53" y="83" width="194" height="93" rx="7" fill="#9e785a"/><rect x="61" y="53" width="178" height="65" rx="13" fill="#b89b80"/><rect x="68" y="119" width="164" height="50" rx="6" fill="#e8ded1"/><path d="M150 121v47" stroke="#c4b09c" stroke-width="2"/><path d="M67 174v25M233 174v25" stroke="#60412f" stroke-width="8" stroke-linecap="round"/>';
-else if(kind==="coffee") art='<rect x="66" y="105" width="168" height="20" rx="5" fill="url(#wood)"/><path d="M82 124l-7 72M218 124l7 72" stroke="#80583e" stroke-width="9" stroke-linecap="round"/><path d="M100 113h100" stroke="#d8b38d" stroke-width="2" opacity=".7"/>';
-else if(kind==="night") art='<rect x="92" y="92" width="116" height="91" rx="5" fill="url(#wood)"/><rect x="101" y="101" width="98" height="35" rx="3" fill="#d8c1aa"/><rect x="101" y="142" width="98" height="31" rx="3" fill="#c6a587"/><circle cx="150" cy="118" r="2.5" fill="#80583e"/><circle cx="150" cy="157" r="2.5" fill="#80583e"/><path d="M103 183v15M197 183v15" stroke="#60412f" stroke-width="7"/>';
-else art='<rect x="70" y="80" width="160" height="100" rx="8" fill="#d9c6b2"/><path d="M88 101h124M88 122h124M88 143h124" stroke="#b69a80" stroke-width="3"/><path d="M90 180v18M210 180v18" stroke="#80583e" stroke-width="8"/><circle cx="150" cy="54" r="18" fill="#a77c59"/><path d="M142 54h16M150 46v16" stroke="#fff2e6" stroke-width="3"/>';
-return '<svg viewBox="0 0 300 230" role="img" aria-label="Illustration of '+kind+' furniture">'+common+art+'</svg>';
-}
-function renderCategories(){
-$("categories").innerHTML=categories.map(c=>`<button class="chip ${c===selectedCategory?"active":""}" data-cat="${c}">${c==="All"?(currentLang==="en"?"All pieces":"ሁሉም"):c}</button>`).join("");
-$("categories").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{selectedCategory=b.dataset.cat;renderCategories();renderProducts();}));
-}
-function productCard(p){
-return `<article class="product"><div class="product-image" data-open="${p.id}">${furnitureSVG(p.kind)}<button class="heart ${favorites.has(p.id)?"selected":""}" data-fav="${p.id}" aria-label="Toggle ${p.name} favorite">${favorites.has(p.id)?"♥":"♡"}</button></div><div class="product-info"><div class="product-category">${p.category}</div><h3>${p.name}</h3><div class="product-bottom"><span class="price">${money(p.price)}</span><button class="add-btn" data-add="${p.id}" aria-label="Add ${p.name} to order">+</button></div></div></article>`;
-}
-function filteredProducts(){
-let q=$("searchInput").value.trim().toLowerCase();
-return products.filter(p=>(selectedCategory==="All"||p.category===selectedCategory)&&(!q||(p.name+" "+p.category+" "+p.desc).toLowerCase().includes(q)));
-}
-function renderProducts(){
-const items=filteredProducts();
-$("productGrid").innerHTML=items.length?items.map(productCard).join(""):`<div class="empty">No furniture found. Try another search or category.</div>`;
-bindCards($("productGrid"));
-}
-function renderFavorites(){
-let items=products.filter(p=>favorites.has(p.id));
-$("favoritesGrid").innerHTML=items.length?items.map(productCard).join(""):`<div class="empty">No favorites yet. Tap ♡ on a product to save it here.</div>`;
-bindCards($("favoritesGrid"));
-}
-function bindCards(root){
-root.querySelectorAll("[data-fav]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();let id=+b.dataset.fav;favorites.has(id)?favorites.delete(id):favorites.add(id);updateBadges();renderProducts();renderFavorites();}));
-root.querySelectorAll("[data-add]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();addToCart(+b.dataset.add);}));
-root.querySelectorAll("[data-open]").forEach(el=>el.addEventListener("click",()=>openProduct(+el.dataset.open)));
-}
-function addToCart(id){
-cart.set(id,(cart.get(id)||0)+1);updateBadges();renderOrder();showToast(products.find(p=>p.id===id).name+" added to your order");
-}
-function updateBadges(){
-let count=[...cart.values()].reduce((a,b)=>a+b,0);
-$("cartBadge").textContent=count;$("cartBadge").hidden=!count;
-$("favBadge").textContent=favorites.size;$("favBadge").hidden=!favorites.size;
-}
-function renderOrder(){
-let entries=[...cart.entries()].map(([id,qty])=>({p:products.find(p=>p.id===id),qty})).filter(x=>x.p);
-$("orderItems").innerHTML=entries.length?entries.map(({p,qty})=>`<div class="order-line"><div class="mini-thumb">${furnitureSVG(p.kind)}</div><div class="order-line-main"><strong>${p.name}</strong><small>${money(p.price)}</small></div><div class="qty"><button data-minus="${p.id}" aria-label="Decrease quantity">−</button><span>${qty}</span><button data-plus="${p.id}" aria-label="Increase quantity">+</button></div><button class="remove" data-remove="${p.id}" aria-label="Remove ${p.name}">×</button></div>`).join(""):`<div class="empty">Your order is empty. Explore the collection and add a piece you love.</div>`;
-let total=entries.reduce((s,{p,qty})=>s+p.price*qty,0);$("orderTotal").textContent=money(total);
-$("orderItems").querySelectorAll("[data-minus]").forEach(b=>b.addEventListener("click",()=>{let id=+b.dataset.minus;let n=(cart.get(id)||0)-1;if(n<=0)cart.delete(id);else cart.set(id,n);updateBadges();renderOrder();}));
-$("orderItems").querySelectorAll("[data-plus]").forEach(b=>b.addEventListener("click",()=>addToCart(+b.dataset.plus)));
-$("orderItems").querySelectorAll("[data-remove]").forEach(b=>b.addEventListener("click",()=>{cart.delete(+b.dataset.remove);updateBadges();renderOrder();}));
-}
-function openProduct(id){
-currentProduct=products.find(p=>p.id===id);if(!currentProduct)return;
-let p=currentProduct;
-$("modalTitle").textContent=p.name;
-$("modalContent").innerHTML=`<div class="modal-art">${furnitureSVG(p.kind)}</div><div class="product-category">${p.category}</div><p style="margin:8px 0">${p.desc}</p><div class="total-row"><span>Price</span><strong>${money(p.price)}</strong></div><button class="primary wide" id="modalAdd">${p.price===0?"Request custom order":"Add to order"} →</button>`;
-$("productModal").classList.add("open");
-$("modalAdd").addEventListener("click",()=>{addToCart(p.id);$("productModal").classList.remove("open");if(p.price===0)showToast("Custom design request added. Add your details in Order.");});
-}
-function showToast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>t.classList.remove("show"),2300);}
-function showView(id){
-document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===id));
-document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===id));
-if(id==="favoritesView")renderFavorites();if(id==="orderView")renderOrder();
-window.scrollTo({top:0,behavior:"smooth"});
-}
-document.querySelectorAll(".nav-btn").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.view)));
-$("headerFav").addEventListener("click",()=>showView("favoritesView"));
-$("exploreBtn").addEventListener("click",()=>{selectedCategory="All";renderCategories();showView("homeView");$("searchInput").focus();});
-$("seeAllBtn").addEventListener("click",()=>{selectedCategory="All";$("searchInput").value="";renderCategories();renderProducts();});
-$("searchInput").addEventListener("input",renderProducts);
-$("closeModal").addEventListener("click",()=>$("productModal").classList.remove("open"));
-$("productModal").addEventListener("click",e=>{if(e.target===$("productModal"))$("productModal").classList.remove("open");});
-$("themeBtn").addEventListener("click",()=>{document.body.classList.toggle("dark");$("themeBtn").textContent=document.body.classList.contains("dark")?"☀":"☾";});
-$("languageBtn").addEventListener("click",()=>{
-currentLang=currentLang==="en"?"am":"en";document.documentElement.lang=currentLang;
-document.querySelectorAll("[data-en][data-am]").forEach(el=>{el.textContent=el.dataset[currentLang];});
-$("languageBtn").textContent=currentLang==="en"?"文":"EN";
-$("searchInput").placeholder=currentLang==="en"?"Search furniture...":"ፈርኒቸር ይፈልጉ...";
-renderCategories();renderProducts();
-});
-$("orderForm").addEventListener("submit",e=>{
-e.preventDefault();
-if(!cart.size){showToast("Please add furniture to your order first.");showView("homeView");return;}
-const data={name:$("customerName").value.trim(),phone:$("customerPhone").value.trim(),address:$("customerAddress").value.trim(),notes:$("deliveryNotes").value.trim(),items:[...cart.entries()].map(([id,qty])=>({product:products.find(p=>p.id===id).name,qty})),estimatedTotal:[...cart.entries()].reduce((s,[id,qty])=>s+products.find(p=>p.id===id).price*qty,0)};
-const ref="AMB-"+Math.floor(100000+Math.random()*900000);
-$("trackResult").innerHTML=`<div class="notice"><strong>Demo request prepared · ${ref}</strong><br>Your order details are ready, but this demo does not send them to AMBAR Furniture. Connect a backend or Telegram bot to submit real orders.</div>`;
-showToast("Order request prepared: "+ref);
-cart.clear();updateBadges();renderOrder();$("orderForm").reset();$("orderRef").value=ref;showView("trackView");
-});
-$("trackForm").addEventListener("submit",e=>{e.preventDefault();$("trackResult").innerHTML='<div class="notice"><strong>Demo interface only</strong><br>Order status lookup will work after connecting your order database or Telegram bot.</div>';});
-$("aboutShopBtn").addEventListener("click",()=>showView("homeView"));
-renderCategories();renderProducts();renderOrder();updateBadges();
-})();
-</script>
+  <!-- ==================== CUSTOMIZER / QUICK ORDER BOTTOM SHEET ==================== -->
+  <div id="customizerSheet" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" onclick="closeCustomizerSheet()"></div>
+    
+    <div class="absolute inset-x-0 bottom-0 bg-white dark:bg-gray-900 rounded-t-3xl max-h-[90vh] flex flex-col sheet-transition shadow-2xl max-w-md mx-auto">
+      
+      <!-- Sheet Handle Bar -->
+      <div class="w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto my-3 shrink-0"></div>
+
+      <!-- Content Scroll -->
+      <div class="overflow-y-auto px-5 pb-6 space-y-4 flex-1">
+        
+        <div class="flex gap-3">
+          <img id="sheetImg" src="" class="w-24 h-24 object-cover rounded-2xl bg-gray-100 border border-gray-200 shrink-0">
+          <div class="space-y-1 flex-1 min-w-0">
+            <span id="sheetCategory" contenteditable="true" class="text-[10px] font-extrabold text-orange-500 uppercase tracking-wider block"></span>
+            <h3 id="sheetTitle" contenteditable="true" class="font-display font-bold text-base text-gray-900 dark:text-white truncate"></h3>
+            <p id="sheetDesc" contenteditable="true" class="text-[11px] text-gray-500 leading-tight line-clamp-2"></p>
+            <div class="text-base font-extrabold text-orange-600 pt-1" id="sheetBasePrice"></div>
+          </div>
+        </div>
+
+        <hr class="border-gray-100 dark:border-gray-800">
+
+        <!-- Materials / Colors -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+              1. Material & Color
+            </label>
+            <button onclick="addMaterialOption()" class="text-[10px] text-orange-600 font-bold flex items-center gap-0.5">
+              <i class="fa-solid fa-plus text-[9px]"></i> Add Color
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-2" id="materialContainer"></div>
+        </div>
+
+        <!-- Variants / Sizes -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+              2. Size & Variant
+            </label>
+            <button onclick="addVariantOption()" class="text-[10px] text-orange-600 font-bold flex items-center gap-0.5">
+              <i class="fa-solid fa-plus text-[9px]"></i> Add Size
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2" id="variantContainer"></div>
+        </div>
+
+        <!-- Quantity Picker -->
+        <div class="flex items-center justify-between bg-orange-50 dark:bg-gray-800 p-3 rounded-2xl border border-orange-100 dark:border-gray-700">
+          <span class="text-xs font-bold text-gray-800 dark:text-gray-200">Quantity</span>
+          <div class="flex items-center gap-3">
+            <button onclick="updateSheetQty(-1)" class="w-7 h-7 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 flex items-center justify-center font-bold text-gray-800 dark:text-white active-scale">
+              <i class="fa-solid fa-minus text-[10px]"></i>
+            </button>
+            <span id="sheetQty" class="font-extrabold text-sm text-gray-900 dark:text-white min-w-[16px] text-center">1</span>
+            <button onclick="updateSheetQty(1)" class="w-7 h-7 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 flex items-center justify-center font-bold text-gray-800 dark:text-white active-scale">
+              <i class="fa-solid fa-plus text-[10px]"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action Footer -->
+      <div class="p-4 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 shrink-0">
+        <button onclick="confirmAddToCart()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-orange-500/25 active-scale flex items-center justify-center gap-2 text-xs">
+          <i class="fa-solid fa-cart-plus text-sm"></i>
+          <span>Add to Order • <span id="sheetCalculatedTotal">$0</span></span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ==================== CART SHEET ==================== -->
+  <div id="cartSheet" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" onclick="closeCartSheet()"></div>
+    
+    <div class="absolute inset-x-0 bottom-0 bg-white dark:bg-gray-900 rounded-t-3xl max-h-[85vh] flex flex-col sheet-transition shadow-2xl max-w-md mx-auto">
+      
+      <!-- Handle -->
+      <div class="w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto my-3 shrink-0"></div>
+
+      <div class="px-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
+        <h3 class="font-display font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
+          <i class="fa-solid fa-bag-shopping text-orange-500"></i>
+          <span>Your Furniture Order</span>
+        </h3>
+        <button onclick="closeCartSheet()" class="text-xs text-gray-400 hover:text-gray-600">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Items List -->
+      <div class="overflow-y-auto p-5 space-y-3 flex-1" id="cartItemsList">
+        <!-- Dynamic Cart Items -->
+      </div>
+
+      <div id="cartEmptyState" class="hidden py-8 text-center space-y-2">
+        <p class="text-xs font-semibold text-gray-400">Your order list is empty.</p>
+      </div>
+
+      <!-- Order Summary -->
+      <div class="p-5 bg-gray-50 dark:bg-gray-800/60 border-t border-gray-100 dark:border-gray-800 shrink-0 space-y-2">
+        <div class="flex justify-between text-xs text-gray-500">
+          <span>Subtotal</span>
+          <span id="cartSubtotal" class="font-bold text-gray-800 dark:text-gray-200">$0.00</span>
+        </div>
+        <div class="flex justify-between text-xs text-gray-500">
+          <span>Est. Delivery</span>
+          <span id="cartDelivery" class="font-bold text-gray-800 dark:text-gray-200">$0.00</span>
+        </div>
+        <div class="flex justify-between text-sm font-extrabold text-gray-900 dark:text-white pt-1 border-t border-gray-200 dark:border-gray-700">
+          <span>Total</span>
+          <span id="cartTotal" class="text-orange-600 font-display">$0.00</span>
+        </div>
+
+        <!-- Custom Order Note -->
+        <input 
+          type="text" 
+          id="orderNote" 
+          placeholder="Special delivery instructions..." 
+          class="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500 mt-2"
+        />
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ==================== JAVASCRIPT & TELEGRAM SDK INTEGRATION ==================== -->
+  <script>
+    // --- TELEGRAM WEB APP SDK INITIALIZATION ---
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.enableClosingConfirmation();
+      try {
+        tg.setHeaderColor('#ffffff');
+        tg.setBackgroundColor('#f9fafb');
+      } catch (e) {}
+    }
+
+    function triggerHaptic(style = 'medium') {
+      if (tg && tg.HapticFeedback) {
+        if (style === 'success' || style === 'warning' || style === 'error') {
+          tg.HapticFeedback.notificationOccurred(style);
+        } else {
+          tg.HapticFeedback.impactOccurred(style);
+        }
+      }
+    }
+
+    // --- DATA MODEL ---
+    let categories = ["All", "Seating", "Tables", "Bedroom", "Office", "Lighting"];
+    
+    let products = [
+      {
+        id: "p1",
+        name: "Velvet Lounge Chair",
+        category: "Seating",
+        price: 349,
+        rating: 4.9,
+        tag: "Popular",
+        image: "https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&q=80&w=600",
+        description: "Italian soft velvet cushion with ergonomic support & steel base.",
+        materials: [
+          { name: "Emerald Velvet", hex: "#2d5a43", extra: 0 },
+          { name: "Oatmeal Bouclé", hex: "#ece6d8", extra: 25 },
+          { name: "Charcoal", hex: "#262626", extra: 0 }
+        ],
+        variants: [
+          { name: "Standard", modifier: 0, label: "Compact width" },
+          { name: "Wide Lounge", modifier: 60, label: "+4 inch depth" }
+        ]
+      },
+      {
+        id: "p2",
+        name: "Solid Oak Dining Table",
+        category: "Tables",
+        price: 799,
+        rating: 4.8,
+        tag: "Eco Wood",
+        image: "https://images.unsplash.com/photo-1530018607912-eff2daa1bac4?auto=format&fit=crop&q=80&w=600",
+        description: "Sustainably sourced white oak timber with natural oil matte finish.",
+        materials: [
+          { name: "Natural Oak", hex: "#d4b387", extra: 0 },
+          { name: "Smoked Walnut", hex: "#5c4033", extra: 90 }
+        ],
+        variants: [
+          { name: "6 Seater", modifier: 0, label: "160 cm" },
+          { name: "8 Seater", modifier: 120, label: "200 cm" }
+        ]
+      },
+      {
+        id: "p3",
+        name: "Architect Brass Lamp",
+        category: "Lighting",
+        price: 129,
+        rating: 4.7,
+        tag: "New",
+        image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&q=80&w=600",
+        description: "Dimmable warm LED desk lamp with 360-degree adjustable arm.",
+        materials: [
+          { name: "Brushed Brass", hex: "#cfab60", extra: 0 },
+          { name: "Matte Black", hex: "#1f1f1f", extra: 0 }
+        ],
+        variants: [
+          { name: "Plug-in", modifier: 0, label: "Standard cord" },
+          { name: "Wireless Battery", modifier: 30, label: "12hr portable" }
+        ]
+      },
+      {
+        id: "p4",
+        name: "Minimalist Oak Desk",
+        category: "Office",
+        price: 480,
+        rating: 4.9,
+        tag: "Studio",
+        image: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&q=80&w=600",
+        description: "Clean aesthetic study desk with dual drawer wire organizer.",
+        materials: [
+          { name: "Birch", hex: "#e3cca8", extra: 0 },
+          { name: "Walnut", hex: "#6e4d3b", extra: 40 }
+        ],
+        variants: [
+          { name: "120 cm", modifier: 0, label: "Standard" },
+          { name: "150 cm", modifier: 80, label: "Executive" }
+        ]
+      }
+    ];
+
+    // --- STATE ---
+    let selectedCategory = "All";
+    let searchQuery = "";
+    let favorites = new Set();
+    let favoritesOnly = false;
+    let cart = [];
+
+    // Customizer Modal State
+    let activeProduct = null;
+    let selectedMaterial = null;
+    let selectedVariant = null;
+    let customizerQty = 1;
+
+    // --- INITIALIZATION ---
+    window.addEventListener('DOMContentLoaded', () => {
+      initTGUser();
+      renderCategories();
+      renderProducts();
+      updateCartUI();
+
+      // Configure Native TG MainButton
+      if (tg && tg.MainButton) {
+        tg.MainButton.setText("VIEW ORDER");
+        tg.MainButton.onClick(handleMainButtonClick);
+      }
+    });
+
+    function initTGUser() {
+      if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        const u = tg.initDataUnsafe.user;
+        const name = u.first_name ? `${u.first_name} ${u.last_name || ''}` : `@${u.username}`;
+        document.getElementById('userName').textContent = name.trim();
+        
+        if (u.first_name) {
+          document.getElementById('userAvatar').textContent = u.first_name.charAt(0).toUpperCase();
+        }
+      }
+    }
+
+    // --- CATEGORY RENDERING ---
+    function renderCategories() {
+      const container = document.getElementById('categoryContainer');
+      container.innerHTML = categories.map((cat, idx) => {
+        const isActive = cat === selectedCategory;
+        const activeClass = isActive 
+          ? 'bg-orange-500 text-white font-bold shadow-sm' 
+          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 font-medium';
+        return `
+          <button 
+            onclick="selectCategory('${cat}')" 
+            class="px-3 py-1 rounded-full text-xs transition-all whitespace-nowrap active-scale shrink-0 ${activeClass}"
+          >
+            <span contenteditable="true" onblur="updateCategoryName(${idx}, this.innerText)" onclick="event.stopPropagation()">${cat}</span>
+          </button>
+        `;
+      }).join('') + `
+        <button onclick="addNewCategory()" class="px-2.5 py-1 rounded-full text-xs bg-orange-50 text-orange-600 font-bold border border-orange-200 flex items-center gap-1 shrink-0 active-scale">
+          <i class="fa-solid fa-plus text-[10px]"></i> Add
+        </button>
+      `;
+    }
+
+    function selectCategory(cat) {
+      triggerHaptic('light');
+      selectedCategory = cat;
+      renderCategories();
+      renderProducts();
+    }
+
+    function updateCategoryName(index, newName) {
+      if (newName.trim()) {
+        categories[index] = newName.trim();
+      }
+    }
+
+    function addNewCategory() {
+      triggerHaptic('medium');
+      const name = prompt("Enter new category name:");
+      if (name && name.trim()) {
+        categories.push(name.trim());
+        renderCategories();
+      }
+    }
+
+    // --- PRODUCT GRID RENDERING ---
+    function renderProducts() {
+      const grid = document.getElementById('productGrid');
+      const emptyState = document.getElementById('emptyState');
+
+      const filtered = products.filter(p => {
+        const matchCat = selectedCategory === "All" || p.category === selectedCategory;
+        const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            p.description.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchFav = !favoritesOnly || favorites.has(p.id);
+        return matchCat && matchSearch && matchFav;
+      });
+
+      document.getElementById('catalogCount').textContent = `(${filtered.length} items)`;
+
+      if (filtered.length === 0) {
+        grid.innerHTML = "";
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      grid.innerHTML = filtered.map((p) => {
+        const isFav = favorites.has(p.id);
+        return `
+          <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-xs flex flex-col justify-between relative group">
+            
+            <!-- Item Image & Actions -->
+            <div class="relative aspect-square bg-gray-100 dark:bg-gray-900 overflow-hidden">
+              <img src="${p.image}" class="w-full h-full object-cover">
+              
+              <!-- Favorite Button -->
+              <button onclick="toggleFav(event, '${p.id}')" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-md flex items-center justify-center text-gray-700 dark:text-gray-200 active-scale shadow-sm">
+                <i class="${isFav ? 'fa-solid text-rose-500' : 'fa-regular'} fa-heart text-xs"></i>
+              </button>
+
+              <!-- Delete Button -->
+              <button onclick="deleteProduct(event, '${p.id}')" class="absolute top-2 left-2 w-7 h-7 rounded-full bg-rose-500/80 text-white flex items-center justify-center active-scale shadow-sm">
+                <i class="fa-solid fa-trash-can text-[10px]"></i>
+              </button>
+
+              <!-- Editable Tag -->
+              <span contenteditable="true" onblur="updateProductProp('${p.id}', 'tag', this.innerText)" class="absolute bottom-2 left-2 bg-gray-900/80 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                ${p.tag}
+              </span>
+            </div>
+
+            <!-- Card Info -->
+            <div class="p-2.5 flex-1 flex flex-col justify-between space-y-1.5">
+              <div>
+                <h4 contenteditable="true" onblur="updateProductProp('${p.id}', 'name', this.innerText)" class="font-display font-bold text-xs text-gray-900 dark:text-white leading-tight focus:bg-orange-50">
+                  ${p.name}
+                </h4>
+                <p contenteditable="true" onblur="updateProductProp('${p.id}', 'description', this.innerText)" class="text-[10px] text-gray-400 line-clamp-1 mt-0.5">
+                  ${p.description}
+                </p>
+              </div>
+
+              <div class="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-700">
+                <div class="font-extrabold text-xs text-orange-600 flex items-center">
+                  $ <span contenteditable="true" onblur="updateProductProp('${p.id}', 'price', parseFloat(this.innerText) || 0)">${p.price}</span>
+                </div>
+
+                <button onclick="openCustomizer('${p.id}')" class="bg-orange-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold active-scale shadow-sm flex items-center gap-1">
+                  <i class="fa-solid fa-sliders text-[9px]"></i> Order
+                </button>
+              </div>
+            </div>
+
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateProductProp(id, prop, value) {
+      triggerHaptic('light');
+      const p = products.find(item => item.id === id);
+      if (p) {
+        p[prop] = value;
+      }
+    }
+
+    function addNewFurnitureItem() {
+      triggerHaptic('medium');
+      const newId = 'p' + (products.length + 1);
+      products.unshift({
+        id: newId,
+        name: "New Lounge Chair",
+        category: selectedCategory === "All" ? "Seating" : selectedCategory,
+        price: 299,
+        rating: 5.0,
+        tag: "New",
+        image: "https://images.unsplash.com/photo-1580481072645-022f9a6d1270?auto=format&fit=crop&q=80&w=600",
+        description: "Custom editable seating item created inside Telegram.",
+        materials: [{ name: "Standard Fabric", hex: "#ea580c", extra: 0 }],
+        variants: [{ name: "Standard Size", modifier: 0, label: "Regular" }]
+      });
+      renderProducts();
+    }
+
+    function deleteProduct(e, id) {
+      e.stopPropagation();
+      triggerHaptic('warning');
+      products = products.filter(p => p.id !== id);
+      renderProducts();
+    }
+
+    // --- SEARCH & FAVORITES ---
+    function handleSearch() {
+      searchQuery = document.getElementById('searchInput').value.trim();
+      document.getElementById('clearSearchBtn').classList.toggle('hidden', searchQuery.length === 0);
+      renderProducts();
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = "";
+      searchQuery = "";
+      document.getElementById('clearSearchBtn').classList.add('hidden');
+      renderProducts();
+    }
+
+    function toggleFav(e, id) {
+      e.stopPropagation();
+      triggerHaptic('light');
+      if (favorites.has(id)) favorites.delete(id);
+      else favorites.add(id);
+
+      const badge = document.getElementById('favBadge');
+      badge.textContent = favorites.size;
+      badge.classList.toggle('hidden', favorites.size === 0);
+      renderProducts();
+    }
+
+    function toggleFavoritesFilter() {
+      triggerHaptic('medium');
+      favoritesOnly = !favoritesOnly;
+      const btn = document.getElementById('favToggleBtn');
+      const icon = document.getElementById('favIcon');
+      btn.classList.toggle('bg-rose-100', favoritesOnly);
+      icon.classList.toggle('text-rose-600', favoritesOnly);
+      renderProducts();
+    }
+
+    function resetFilters() {
+      selectedCategory = "All";
+      searchQuery = "";
+      favoritesOnly = false;
+      document.getElementById('searchInput').value = "";
+      renderCategories();
+      renderProducts();
+    }
+
+
+    // --- CUSTOMIZER SHEET LOGIC ---
+    function openCustomizer(id) {
+      triggerHaptic('medium');
+      activeProduct = products.find(p => p.id === id);
+      if (!activeProduct) return;
+
+      selectedMaterial = activeProduct.materials[0];
+      selectedVariant = activeProduct.variants[0];
+      customizerQty = 1;
+
+      document.getElementById('sheetImg').src = activeProduct.image;
+      document.getElementById('sheetCategory').textContent = activeProduct.category;
+      document.getElementById('sheetTitle').textContent = activeProduct.name;
+      document.getElementById('sheetDesc').textContent = activeProduct.description;
+      document.getElementById('sheetBasePrice').textContent = `$${activeProduct.price}`;
+      document.getElementById('sheetQty').textContent = customizerQty;
+
+      renderMaterials();
+      renderVariants();
+      updateSheetTotal();
+
+      document.getElementById('customizerSheet').classList.remove('hidden');
+
+      if (tg && tg.BackButton) {
+        tg.BackButton.show();
+        tg.BackButton.onClick(closeCustomizerSheet);
+      }
+    }
+
+    function closeCustomizerSheet() {
+      triggerHaptic('light');
+      document.getElementById('customizerSheet').classList.add('hidden');
+      if (tg && tg.BackButton) tg.BackButton.hide();
+    }
+
+    function renderMaterials() {
+      const container = document.getElementById('materialContainer');
+      container.innerHTML = activeProduct.materials.map((m, idx) => {
+        const isSel = selectedMaterial.name === m.name;
+        const activeStyle = isSel ? 'ring-2 ring-orange-500 border-orange-500 font-bold' : 'border-gray-200 dark:border-gray-700';
+        return `
+          <button onclick="selectMaterial(${idx})" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border bg-white dark:bg-gray-800 text-[11px] text-gray-800 dark:text-gray-200 ${activeStyle} active-scale">
+            <span class="w-3.5 h-3.5 rounded-full border border-black/10" style="background-color: ${m.hex}"></span>
+            <span contenteditable="true" onblur="m.name = this.innerText">${m.name}</span>
+            ${m.extra > 0 ? `<span class="text-orange-600 font-bold">+$${m.extra}</span>` : ''}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectMaterial(idx) {
+      triggerHaptic('light');
+      selectedMaterial = activeProduct.materials[idx];
+      renderMaterials();
+      updateSheetTotal();
+    }
+
+    function addMaterialOption() {
+      triggerHaptic('medium');
+      const name = prompt("Material/Color name:");
+      if (name) {
+        activeProduct.materials.push({ name, hex: "#ea580c", extra: 15 });
+        renderMaterials();
+      }
+    }
+
+    function renderVariants() {
+      const container = document.getElementById('variantContainer');
+      container.innerHTML = activeProduct.variants.map((v, idx) => {
+        const isSel = selectedVariant.name === v.name;
+        const activeStyle = isSel ? 'border-orange-500 bg-orange-50/50 dark:bg-gray-800' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800';
+        return `
+          <button onclick="selectVariant(${idx})" class="p-2 rounded-xl border text-left ${activeStyle} active-scale">
+            <div contenteditable="true" onblur="v.name = this.innerText" class="text-xs font-bold text-gray-900 dark:text-white">${v.name}</div>
+            <div class="text-[9px] text-orange-600 font-bold mt-0.5">${v.modifier > 0 ? `+$${v.modifier}` : 'Included'}</div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectVariant(idx) {
+      triggerHaptic('light');
+      selectedVariant = activeProduct.variants[idx];
+      renderVariants();
+      updateSheetTotal();
+    }
+
+    function addVariantOption() {
+      triggerHaptic('medium');
+      const name = prompt("Variant/Size name:");
+      if (name) {
+        activeProduct.variants.push({ name, modifier: 30, label: "Custom size" });
+        renderVariants();
+      }
+    }
+
+    function updateSheetQty(delta) {
+      const next = customizerQty + delta;
+      if (next >= 1 && next <= 15) {
+        triggerHaptic('light');
+        customizerQty = next;
+        document.getElementById('sheetQty').textContent = customizerQty;
+        updateSheetTotal();
+      }
+    }
+
+    function updateSheetTotal() {
+      const unit = activeProduct.price + (selectedMaterial ? selectedMaterial.extra : 0) + (selectedVariant ? selectedVariant.modifier : 0);
+      const total = unit * customizerQty;
+      document.getElementById('sheetCalculatedTotal').textContent = `$${total}`;
+    }
+
+    function confirmAddToCart() {
+      triggerHaptic('success');
+      const unit = activeProduct.price + (selectedMaterial ? selectedMaterial.extra : 0) + (selectedVariant ? selectedVariant.modifier : 0);
+      
+      cart.push({
+        id: Date.now(),
+        product: activeProduct,
+        material: selectedMaterial,
+        variant: selectedVariant,
+        quantity: customizerQty,
+        unitPrice: unit,
+        totalPrice: unit * customizerQty
+      });
+
+      updateCartUI();
+      closeCustomizerSheet();
+      
+      if (tg && tg.showAlert) {
+        tg.showAlert(`Added ${customizerQty}x ${activeProduct.name} to your Telegram furniture order!`);
+      }
+    }
+
+
+    // --- CART DRAWER & MAINBUTTON LOGIC ---
+    function updateCartUI() {
+      const badge = document.getElementById('cartBadge');
+      const totalCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+      badge.textContent = totalCount;
+
+      const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
+      const delivery = subtotal > 0 ? 35 : 0;
+      const total = subtotal + delivery;
+
+      document.getElementById('cartSubtotal').textContent = `$${subtotal.toFixed(2)}`;
+      document.getElementById('cartDelivery').textContent = `$${delivery.toFixed(2)}`;
+      document.getElementById('cartTotal').textContent = `$${total.toFixed(2)}`;
+
+      if (tg && tg.MainButton) {
+        if (cart.length > 0) {
+          tg.MainButton.setText(`CHECKOUT ORDER ($${total.toFixed(2)})`);
+          tg.MainButton.show();
+        } else {
+          tg.MainButton.hide();
+        }
+      }
+
+      renderCartItems();
+    }
+
+    function renderCartItems() {
+      const container = document.getElementById('cartItemsList');
+      const emptyState = document.getElementById('cartEmptyState');
+
+      if (cart.length === 0) {
+        container.innerHTML = "";
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      container.innerHTML = cart.map((item, idx) => `
+        <div class="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+          <img src="${item.product.image}" class="w-12 h-12 rounded-lg object-cover bg-white">
+          <div class="flex-1 min-w-0">
+            <h5 class="font-bold text-xs text-gray-900 dark:text-white truncate">${item.product.name}</h5>
+            <p class="text-[10px] text-gray-400">${item.material.name} • ${item.variant.name}</p>
+            <span class="text-xs font-extrabold text-orange-600">$${item.totalPrice}</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-gray-700 dark:text-gray-300">x${item.quantity}</span>
+            <button onclick="removeCartItem(${idx})" class="text-rose-500 p-1">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function removeCartItem(idx) {
+      triggerHaptic('warning');
+      cart.splice(idx, 1);
+      updateCartUI();
+    }
+
+    function openCartSheet() {
+      triggerHaptic('medium');
+      document.getElementById('cartSheet').classList.remove('hidden');
+      if (tg && tg.BackButton) {
+        tg.BackButton.show();
+        tg.BackButton.onClick(closeCartSheet);
+      }
+    }
+
+    function closeCartSheet() {
+      triggerHaptic('light');
+      document.getElementById('cartSheet').classList.add('hidden');
+      if (tg && tg.BackButton) tg.BackButton.hide();
+    }
+
+    function handleMainButtonClick() {
+      triggerHaptic('success');
+      const note = document.getElementById('orderNote').value;
+      const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
+      const total = subtotal + 35;
+
+      const orderPayload = {
+        user: tg?.initDataUnsafe?.user || { name: 'Guest' },
+        items: cart,
+        total: total,
+        note: note
+      };
+
+      if (tg && tg.sendData) {
+        tg.sendData(JSON.stringify(orderPayload));
+      } else if (tg && tg.showAlert) {
+        tg.showAlert(`🎉 Order Submitted!\nTotal: $${total.toFixed(2)}\nItems: ${cart.length}`);
+      } else {
+        alert(`Order Placed! Total: $${total}`);
+      }
+
+      cart = [];
+      updateCartUI();
+      closeCartSheet();
+    }
+  </script>
 </body>
 </html>
