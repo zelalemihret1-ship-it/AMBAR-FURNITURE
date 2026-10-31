@@ -933,6 +933,44 @@ a{color:var(--ambar-orange-deep)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 </style>
 
+
+<style id="ambar-home-redesign">
+#productsView{max-width:760px;margin:0 auto}
+#ambarHomeHero{position:relative;overflow:hidden;margin:8px 0 22px;padding:25px 22px 22px;border-radius:27px;background:linear-gradient(135deg,#25282d 0%,#3a3b3d 55%,#68432f 100%);color:#fff;box-shadow:0 15px 34px rgba(35,30,27,.18);isolation:isolate}
+#ambarHomeHero:before{content:"";position:absolute;z-index:-1;width:230px;height:230px;right:-72px;top:-88px;border-radius:50%;background:radial-gradient(circle,rgba(255,151,89,.6),rgba(255,151,89,0) 68%)}
+#ambarHomeHero:after{content:"";position:absolute;z-index:-1;width:150px;height:150px;right:42px;bottom:-112px;border:1px solid rgba(255,255,255,.16);border-radius:50%;box-shadow:0 0 0 22px rgba(255,255,255,.035),0 0 0 44px rgba(255,255,255,.025)}
+#ambarHomeHero .hero-kicker{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.09);font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#ffd3b7}
+#ambarHomeHero h2{max-width:310px;margin:17px 0 8px;font-size:clamp(27px,7vw,36px);line-height:1.04;letter-spacing:-.055em;font-weight:850;color:#fff}
+#ambarHomeHero p{max-width:290px;margin:0;color:rgba(255,255,255,.76);font-size:13px;line-height:1.55}
+#ambarHomeHero .hero-actions{display:flex;align-items:center;gap:12px;margin-top:19px}
+#ambarHomeHero .hero-shop{min-height:46px;padding:0 18px;border:0;border-radius:15px;background:#f47732;color:#fff;font-weight:800;box-shadow:0 7px 17px rgba(244,119,50,.28)}
+#ambarHomeHero .hero-note{font-size:11px;color:rgba(255,255,255,.7)}
+#ambarHomeHero .hero-emblem{position:absolute;right:20px;bottom:20px;font-size:56px;line-height:1;opacity:.17;transform:rotate(-12deg)}
+#ambarHomeTools{display:flex;align-items:center;gap:9px;margin:0 0 16px}
+#ambarHomeTools .ambar-search-bar{flex:1;min-width:0}
+#ambarHomeTools #myOrdersButton{flex:0 0 auto;min-height:47px;border-radius:15px;background:#fff;border:1px solid rgba(35,38,42,.09);padding:0 13px;box-shadow:0 2px 9px rgba(25,28,32,.045);font-size:12px;font-weight:750}
+#ambarHomeTools .language-picker{flex:0 0 auto}
+#ambarHomeTools #languageSwitcher{min-height:47px;border-radius:15px;background:#fff;border:1px solid rgba(35,38,42,.09);padding:0 11px;font-size:11px}
+#ambarHomeSectionIntro{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:22px 2px 11px}
+#ambarHomeSectionIntro h2{margin:0;font-size:21px;letter-spacing:-.04em;font-weight:850}
+#ambarHomeSectionIntro p{margin:4px 0 0;color:#858991;font-size:12px}
+#ambarHomeSectionIntro .home-count-label{font-size:11px;color:#9a9da3;font-weight:700}
+#categoryTabs{padding:2px 0 13px;margin:0 0 8px}
+#productsView .section-title{margin:8px 2px 13px}
+#productsView .section-title h2{font-size:20px;letter-spacing:-.04em}
+#productsView .product-page-footer{margin-top:24px}
+#productsView .product-footer-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+@media(max-width:430px){
+ #ambarHomeHero{padding:23px 19px 20px;margin-top:5px}
+ #ambarHomeTools{gap:7px;flex-wrap:wrap}
+ #ambarHomeTools .ambar-search-bar{flex-basis:100%;order:0}
+ #ambarHomeTools #myOrdersButton{order:1;flex:1}
+ #ambarHomeTools .language-picker{order:2}
+ #ambarHomeSectionIntro h2{font-size:19px}
+ #productsView .product-footer-actions{grid-template-columns:1fr}
+}
+</style>
+
 </head><body><div id="ambarWelcomeSplash" aria-label="Welcome to AMBAR Furniture"><div class="welcome-logo-glass"><img src="/ambar-app-icon.png" alt="AMBAR Furniture" onerror="this.onerror=null;this.src=location.origin+'/ambar-app-icon.png'"></div><h1 class="welcome-title">AMBAR</h1><p class="welcome-subtitle">Furniture · Modern living</p></div><div id="telegramGate" class="auth-gate hidden"><div class="auth-card"><img src="/ambar-app-icon.png" alt="AMBAR Furniture" style="width:64px;height:64px;border-radius:16px"><h2>Open in Telegram</h2><p class="intro">Please open AMBAR Furniture through our Telegram app to sign in and place an order.</p><a class="btn" href="https://t.me/ambar_salesbot" style="display:inline-block;text-decoration:none;margin-top:14px">Open Telegram</a></div></div><div id="accountConfirmGate" class="auth-gate hidden" role="dialog" aria-modal="true" aria-labelledby="accountConfirmTitle"><div class="auth-card"><img class="auth-mark" src="/ambar-app-icon.png" alt="AMBAR Furniture"><p class="step-label" style="margin-top:18px">SECURE TELEGRAM SIGN-IN</p><h2 id="accountConfirmTitle">Continue to this account?</h2><p class="intro">Confirm the Telegram account you want to use before entering AMBAR Furniture.</p><div class="auth-account"><img id="confirmAvatar" alt=""><div><strong id="confirmName">Telegram customer</strong><small id="confirmUsername">Verified by Telegram</small></div></div><button id="confirmContinue" class="btn" type="button">Continue to this account</button><button id="confirmCancel" class="btn secondary" type="button">Not this account</button><p class="muted" style="margin-top:14px">To use another account, close this window and switch accounts in Telegram first.</p></div></div><div class="wrap pre-auth">
 <header id="appHeader"><img class="brand-logo" src="/ambar-app-icon.png" alt="AMBAR Furniture logo" onerror="this.onerror=null;this.src=location.origin+'/ambar-app-icon.png'"><div class="brand-copy"><h1>AMBAR Furniture</h1><p class="sub">Modern living · Timeless design</p></div><div class="header-actions" style="display:flex;align-items:center;gap:8px"><button id="themeToggle" type="button" aria-label="Switch to dark theme" title="Switch theme">☾</button><button id="favoritesViewToggle" type="button" aria-label="Open favorites" title="Favorite products" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg></button><button id="favoritesToggle" class="top-favorites-btn top-cart-btn" type="button" aria-label="Open shopping cart" aria-pressed="false" title="Shopping cart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h8.7a2 2 0 0 0 1.9-1.4L22 8H6"/><circle cx="10" cy="20" r="1.2"/><circle cx="18" cy="20" r="1.2"/></svg><span id="topCartBadge" class="top-cart-badge hidden">0</span></button><div class="service-float"><button class="service-main" id="serviceToggle" aria-label="Customer service" type="button">☏</button><div class="service-menu hidden" id="serviceMenu"><strong id="serviceMenuTitle">Customer Service</strong><div id="serviceMenuLinks"><a href="https://t.me/ambarhome1" target="_blank" rel="noopener">Customer Service 1</a><a href="https://t.me/ambarhome2" target="_blank" rel="noopener">Customer Service 2</a></div></div></div><button id="userProfile" class="user-profile hidden" type="button" aria-label="Open your Telegram profile" title="Your Telegram profile"><img id="userAvatar" alt="" src=""></button><div id="profileMenu" class="profile-menu hidden" role="dialog" aria-label="Telegram profile details"><div class="profile-menu-head"><img id="profileAvatarLarge" alt="Profile picture" src=""><div><strong id="profileFullName">Telegram user</strong><small id="profileUsername"></small></div></div><div class="profile-info"><span>Telegram ID</span><strong id="profileTelegramId"></strong></div><div class="profile-info"><span>Language</span><strong id="profileLanguage"></strong></div><button id="adminManageProducts" class="hidden" type="button" style="width:100%;margin:8px 0">☰ Admin Menu / አስተዳዳሪ ምናሌ</button><button id="workshopERPProfileButton" class="hidden" type="button" style="width:100%;margin:8px 0">🏭 Workshop ERP</button><p class="muted">Your identity is verified by Telegram. Add your phone number and delivery location when placing an order.</p></div></div></header>
 <main id="productsView"><div class="language-row"><div class="language-search-row"><div class="ambar-search-bar" id="ambarSearchBar"><span class="search-mark" aria-hidden="true">⌕</span><input id="productSearch" type="search" autocomplete="off" placeholder="Search products by name, category, or material" aria-label="Search products by name, category, or material"><button id="clearProductSearch" type="button" aria-label="Clear search" title="Clear search">×</button></div><button id="myOrdersButton" class="my-orders-nav" type="button" aria-label="Open my orders"><span class="my-orders-nav-icon" aria-hidden="true">▤</span><span class="my-orders-nav-copy"><strong>Track Orders</strong></span></button><div class="language-picker"><button id="languageSwitcher" type="button" aria-label="Choose language" title="Choose language" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M2.8 9h18.4M2.8 15h18.4M12 2.5c2.5 2.6 3.8 5.8 3.8 9.5s-1.3 6.9-3.8 9.5c-2.5-2.6-3.8-5.8-3.8-9.5S9.5 5.1 12 2.5Z"/></svg><span id="languageLabel">Language</span><span aria-hidden="true">⌄</span></button><div id="languageOptions" class="language-options hidden" role="radiogroup" aria-label="Available languages"><button type="button" data-language-option="en" role="radio" aria-checked="true">English <span class="language-check">✓</span></button><button type="button" data-language-option="am" role="radio" aria-checked="false">አማርኛ <span class="language-check"></span></button></div></div></div><div class="tabs" id="categoryTabs" aria-label="Furniture categories"></div></div><div class="section-title"><div><h2 id="categoryHeading">Shoe Shelf</h2><p id="categoryDescription">Tap any product to see photos and specifications.</p></div></div><div class="grid" id="productGrid"></div><div class="product-page-footer"><div class="foot">🛒 Before you submit, please double-check your selected products and order details to make sure everything is correct. Ready? Let’s place your order with AMBAR Furniture! ✨</div><div class="product-footer-actions"><button class="btn secondary custom-bottom-btn" id="customOrderOpen" type="button">＋ Send a custom product photo</button><button class="btn secondary about-bottom" id="aboutBtn" type="button">About AMBAR Furniture</button></div></div></main>
@@ -1567,6 +1605,40 @@ html[data-theme="light"] input,html[data-theme="light"] textarea,html[data-theme
  document.getElementById('favoritesViewToggle')?.addEventListener('click',()=>activate('favorites'));
  document.getElementById('myOrdersButton')?.addEventListener('click',()=>activate('orders'));
  document.getElementById('productSearch')?.addEventListener('focus',()=>activate('browse'));
+})();
+</script>
+
+
+<script id="ambar-home-redesign-script">
+(function(){
+ function buildAmbarHome(){
+  const main=document.getElementById('productsView');
+  if(!main||document.getElementById('ambarHomeHero'))return;
+  const langRow=main.querySelector('.language-row');
+  const search=main.querySelector('#ambarSearchBar');
+  const orders=main.querySelector('#myOrdersButton');
+  const langPicker=main.querySelector('.language-picker');
+  const tabs=main.querySelector('#categoryTabs');
+  if(!langRow||!search||!tabs)return;
+  const hero=document.createElement('section');
+  hero.id='ambarHomeHero';
+  hero.innerHTML='<span class="hero-kicker">AMBAR · Furniture studio</span><h2>Make room for better living.</h2><p>Thoughtfully designed furniture for a home that feels like yours. Explore the collection and find your next favorite piece.</p><div class="hero-actions"><button class="hero-shop" type="button" id="ambarHeroShop">Explore collection <span aria-hidden="true">→</span></button><span class="hero-note">Made for everyday living</span></div><span class="hero-emblem" aria-hidden="true">✦</span>';
+  main.insertBefore(hero,langRow);
+  const tools=document.createElement('div');tools.id='ambarHomeTools';
+  tools.append(search);
+  if(orders)tools.append(orders);
+  if(langPicker)tools.append(langPicker);
+  langRow.replaceWith(tools);
+  const intro=document.createElement('div');intro.id='ambarHomeSectionIntro';
+  intro.innerHTML='<div><h2>Find your piece</h2><p>Browse styles made for your space</p></div><span class="home-count-label">THE COLLECTION</span>';
+  main.insertBefore(intro,tabs);
+  const oldDesc=main.querySelector('#categoryDescription');
+  if(oldDesc)oldDesc.textContent='Choose a category, then tap any piece to explore photos and details.';
+  const shop=document.getElementById('ambarHeroShop');
+  if(shop)shop.addEventListener('click',function(){const grid=document.getElementById('productGrid');if(grid)grid.scrollIntoView({behavior:'smooth',block:'start'});});
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',buildAmbarHome,{once:true});
+ else buildAmbarHome();
 })();
 </script>
 
