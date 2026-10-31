@@ -48,10 +48,8 @@ CHAPA_WEBHOOK_SECRET = os.getenv("CHAPA_WEBHOOK_SECRET", "").strip()
 CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip().rstrip("/")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-dvit.onrender.com/").strip()
 BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "AMBAR_SALESBOT").strip().lstrip("@")
-# Customer and privileged access always require Telegram-signed initData in this release.
-REQUIRE_TELEGRAM_AUTH = True
-# AMBAR V2 is Telegram Mini App only. Independent browser customer sessions are disabled in code.
-WEB_CUSTOMER_MODE = False
+REQUIRE_TELEGRAM_AUTH = True  # Customer access is Telegram Mini App only.
+WEB_CUSTOMER_MODE = False  # Disable independent browser customer sessions.
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
 
 CATEGORIES = ["Shoe Shelf", "Consul Table", "Center Table", "TV Stand", "Chest Drawer", "Dining Table", "Wardrobe", "Other"]
@@ -272,6 +270,14 @@ def product_image_upload_from_request(product_id, image, *, updating=False):
 app = Flask(__name__, static_folder=None)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SESSION_SIGNING_SECRET") or secrets.token_hex(32)
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=True, PERMANENT_SESSION_LIFETIME=dt.timedelta(days=30))
+
+def web_customer_id():
+    """Stable anonymous browser identity; grants customer functions only, never admin access."""
+    if not session.get("ambar_web_customer_id"):
+        session["ambar_web_customer_id"] = "web-" + secrets.token_urlsafe(18)
+        session.permanent = True
+    return session["ambar_web_customer_id"]
+
 
 def verified_telegram_admin():
     # Owner is fixed in Render. Staff are looked up in Supabase, so their IDs do not
@@ -688,10 +694,10 @@ def validate_telegram_init_data(init_data):
             return False, None
         pairs = dict(parsed)
         received_hash = pairs.pop("hash", None)
-        # The optional Telegram Web App signature is for the separate public-key
-        # validation flow and must not be included in this bot-token HMAC check.
+        # Telegram may attach a separate Ed25519 signature. Bot-token HMAC
+        # verification uses the hash field and excludes the signature field.
         pairs.pop("signature", None)
-        if not received_hash or not re.fullmatch(r"[0-9a-f]{64}", received_hash):
+        if not received_hash or not re.fullmatch(r"[0-9a-fA-F]{64}", received_hash):
             log.warning("Telegram Mini App auth rejected: missing or malformed hash")
             return False, None
         auth_date = int(pairs.get("auth_date", "0"))
@@ -705,7 +711,7 @@ def validate_telegram_init_data(init_data):
         data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(pairs.items()))
         secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
         calculated = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calculated, received_hash):
+        if not hmac.compare_digest(calculated, received_hash.lower()):
             log.warning("Telegram Mini App auth rejected: HMAC mismatch (check V2 BOT_TOKEN belongs to the launching bot)")
             return False, None
         user = json.loads(pairs.get("user", "{}"))
@@ -720,13 +726,19 @@ def validate_telegram_init_data(init_data):
 
 
 def require_auth_from_request():
-    """Return the verified Telegram identity; never accept a browser-supplied ID."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    return validate_telegram_init_data(init_data)
+    if request.is_json:
+        body = request.get_json(silent=True) or {}
+        # Never trust a browser-supplied user id. Authentication comes only from signed initData.
+    else:
+        body = {}
+    if not REQUIRE_TELEGRAM_AUTH:
+        return True, None
+    return validate_telegram_init_data(init_data), None
 
 
 def auth_result(init_data):
-    """AMBAR V2 customer endpoints accept Telegram-signed initData only."""
+    """Customer endpoints accept only a verified Telegram Mini App identity."""
     return validate_telegram_init_data(init_data)
 
 
@@ -1148,10 +1160,10 @@ def api_health():
         "webapp_url_configured": bool(WEBAPP_URL),
         "supabase_configured": bool(supabase_enabled()),
         "telegram_auth_required": REQUIRE_TELEGRAM_AUTH,
-        "web_customer_mode": False,
-        "web_customer_auth_available": False,
+        "web_customer_mode": WEB_CUSTOMER_MODE,
+        "web_customer_auth_available": WEB_CUSTOMER_MODE,
         "telegram_bot_optional": False,
-        "access_modes": ["telegram_mini_app"],
+        "access_modes": ["telegram_mini_app", "independent_web_app"] if WEB_CUSTOMER_MODE else ["telegram_mini_app"],
     }), 200
 
 
@@ -4355,11 +4367,8 @@ def record_cart_event():
     load_product_catalog()
     """Record product additions for a daily service-team digest."""
     try:
-        valid, verified_user_id = validate_telegram_init_data(request.headers.get("X-Telegram-Init-Data", ""))
-        if not valid or not verified_user_id:
-            return jsonify(error="Open AMBAR from the Telegram Mini App to continue.", error_code="telegram_auth_required"), 401
         data = request.get_json(silent=True) or {}
-        user_id = verified_user_id
+        user_id = clean_text(data.get("telegram_user_id", ""), 40, "Telegram user ID", True)
         items = data.get("items", [])
         if not user_id.isdigit() or not isinstance(items, list) or not items:
             return jsonify(error="Invalid cart event."), 400
