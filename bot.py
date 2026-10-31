@@ -2,6 +2,7 @@ import asyncio
 import base64
 import datetime as dt
 import hashlib
+import html
 import hmac
 import json
 import logging
@@ -20,8 +21,8 @@ try:
     from PIL import Image, ImageDraw, ImageFont, ImageOps
 except ImportError:  # image card falls back to the original product photo
     Image = ImageDraw = ImageFont = ImageOps = None
-from flask import Flask, g, jsonify, request, send_from_directory, send_file
-from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+from flask import Flask, g, jsonify, request, send_from_directory, send_file, session
+from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp
 from telegram.ext import Application, CommandHandler, ContextTypes
 from werkzeug.utils import secure_filename
 
@@ -32,21 +33,29 @@ except ImportError:
     pass
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+# Telegram Bot API requests contain the bot token in their URL. Never allow
+# httpx/httpcore INFO logs to print those URLs into Render logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("ambar-furniture")
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/tmp/ambar_custom_uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-BOT_TOKEN = (os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("AMBAR_V2_BOT_TOKEN") or "").strip()
-SERVICE_CHAT_ID = (os.getenv("SERVICE_CHAT_ID") or "").strip()
+# Accept the dedicated V2 variable as well as the conventional BOT_TOKEN.
+# Both names may be set to the same @AMBAR_SALESBOT token in Render.
+BOT_TOKEN = (os.getenv("BOT_TOKEN") or os.getenv("AMBAR_V2_BOT_TOKEN") or "").strip()
+SERVICE_CHAT_ID = os.getenv("SERVICE_CHAT_ID", "").strip()
+WORKERS_TELEGRAM_CHAT_ID = os.getenv("WORKERS_TELEGRAM_CHAT_ID", "").strip()
 AMBAR_LOCATION_URL = "https://maps.app.goo.gl/fxCmYYKzLtYae5GeA"
 CHAPA_SECRET_KEY = os.getenv("CHAPA_SECRET_KEY", "").strip()
 CHAPA_WEBHOOK_SECRET = os.getenv("CHAPA_WEBHOOK_SECRET", "").strip()
 CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip().rstrip("/")
-WEBAPP_URL = (os.getenv("WEBAPP_URL") or "https://ambar-furniture-miniapp.onrender.com/").strip()
-BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "ambar_sels_bot").strip().lstrip("@")
-REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "true").strip().lower() in {"1", "true", "yes", "on"}
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-dvit.onrender.com/").strip()
+BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "AMBAR_SALESBOT").strip().lstrip("@")
+REQUIRE_TELEGRAM_AUTH = True  # Customer access is Telegram Mini App only.
+WEB_CUSTOMER_MODE = False  # Disable independent browser customer sessions.
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
 
 CATEGORIES = ["Shoe Shelf", "Consul Table", "Center Table", "TV Stand", "Chest Drawer", "Dining Table", "Wardrobe", "Other"]
@@ -59,27 +68,22 @@ PRODUCT_CATALOG_FILE = Path(os.getenv("PRODUCT_CATALOG_FILE", str(BASE_DIR / "pr
 PRODUCT_IMAGE_DIR = Path(os.getenv("PRODUCT_IMAGE_DIR", str(BASE_DIR / "products")))
 PRODUCT_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 ADMIN_TELEGRAM_IDS = {x.strip() for x in os.getenv("ADMIN_TELEGRAM_IDS", "").split(",") if x.strip()}
-ADMIN_PASSWORD_MANAGER_TELEGRAM_ID = (os.getenv("ADMIN_PASSWORD_MANAGER_TELEGRAM_ID") or "").strip()
-ADMIN_EMERGENCY_PASSWORD = (os.getenv("ADMIN_EMERGENCY_PASSWORD") or os.getenv("ADMIN_EMERGENCY_PAS") or os.getenv("ADMIN_PASSWORD") or "").strip()
+ADMIN_PASSWORD_MANAGER_TELEGRAM_ID = os.getenv("ADMIN_PASSWORD_MANAGER_TELEGRAM_ID", "").strip()
+ADMIN_EMERGENCY_PASSWORD = os.getenv("ADMIN_EMERGENCY_PASSWORD", "")
 ADMIN_EMERGENCY_SESSIONS = {}
 WORKSHOP_STAFF_SESSIONS = {}
 ADMIN_PASSWORD_ATTEMPTS = {}
 ADMIN_PASSWORD_LOCK = threading.Lock()
 MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
-SUPABASE_URL = (os.getenv("AMBAR_V2_SUPABASE_URL") or os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+SUPABASE_URL = os.getenv("AMBAR_V2_SUPABASE_URL", "").strip().rstrip("/")
 # Prefer the legacy service_role JWT for server-to-server Authorization. Some
 # projects also provide a newer sb_secret_* API key; keep it as the apikey when
 # configured, while the service-role JWT remains the Authorization credential.
-SUPABASE_SERVICE_ROLE_KEY = (os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_SECRET_KEY = os.getenv("AMBAR_V2_SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_AUTHORIZATION_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
 SUPABASE_PRODUCTS_TABLE = os.getenv("SUPABASE_PRODUCTS_TABLE", "products").strip() or "products"
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "product-images").strip() or "product-images"
-# Optional Render settings retained for compatibility with the supplied environment list.
-SUPABASE_ANON_KEY = (os.getenv("SUPABASE_ANON_KEY") or "").strip()
-DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()  # This backend uses Supabase REST; no direct SQL connection is opened.
-FLASK_ENV = (os.getenv("FLASK_ENV") or "production").strip()
-SECRET_KEY = (os.getenv("SECRET_KEY") or os.getenv("SESSION_SIGNING_SECRET") or SUPABASE_SECRET_KEY or BOT_TOKEN or secrets.token_urlsafe(32)).strip()
 
 
 def supabase_enabled():
@@ -270,7 +274,15 @@ def product_image_upload_from_request(product_id, image, *, updating=False):
     return "/products/" + filename
 
 app = Flask(__name__, static_folder=None)
-app.secret_key = SECRET_KEY
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SESSION_SIGNING_SECRET") or secrets.token_hex(32)
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=True, PERMANENT_SESSION_LIFETIME=dt.timedelta(days=30))
+
+def web_customer_id():
+    """Stable anonymous browser identity; grants customer functions only, never admin access."""
+    if not session.get("ambar_web_customer_id"):
+        session["ambar_web_customer_id"] = "web-" + secrets.token_urlsafe(18)
+        session.permanent = True
+    return session["ambar_web_customer_id"]
 
 
 def verified_telegram_admin():
@@ -324,7 +336,7 @@ def stored_emergency_password_hash():
 # Stable signing key lets an emergency session be checked by any Render worker.
 # Prefer an explicitly configured secret, then existing server-only credentials.
 def emergency_session_signing_key():
-    value = (os.getenv("SECRET_KEY", "").strip() or os.getenv("SESSION_SIGNING_SECRET", "").strip()
+    value = (os.getenv("SESSION_SIGNING_SECRET", "").strip()
              or SUPABASE_SECRET_KEY or BOT_TOKEN or ADMIN_EMERGENCY_PASSWORD)
     return value.encode("utf-8") if value else None
 
@@ -374,7 +386,7 @@ def admin_user_from_request():
     token = request.headers.get("X-Admin-Emergency-Session", "")
     if not valid_emergency_session(token, user_id):
         return None, (jsonify(error="Emergency admin password required. Unlock the admin panel again."), 423)
-    if user_id == ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if is_main_admin_user(user_id):
         g.admin_user_id, g.admin_role, g.admin_permissions = user_id, "owner", ["*"]
         return user_id, None
     record = admin_permissions_for(user_id)
@@ -401,6 +413,7 @@ ADMIN_PERMISSION_ALIASES = {
     "security_reports": "security", "activity_reports": "security",
     "customer_service": "service", "service_management": "service",
     "admin": "admin_management", "admin_management": "admin_management",
+    "readymade_orders": "order_dispatch", "order_dispatch_management": "order_dispatch",
 }
 
 def normalize_admin_permissions(value, legacy_role=None):
@@ -422,7 +435,7 @@ def normalize_admin_permissions(value, legacy_role=None):
             normalized.append(key)
     if not normalized and legacy_role == "orders":
         normalized = ["orders"]
-    if legacy_role == "owner":
+    if legacy_role in {"owner", "super_admin"}:
         normalized = ["*"]
     return normalized
 
@@ -441,6 +454,18 @@ def admin_permissions_for(user_id):
     except Exception:
         log.exception("Admin permission lookup failed")
         return None
+
+
+def is_main_admin_user(user_id):
+    """True for the fixed owner and any explicitly assigned second super-admin."""
+    uid = str(user_id or "")
+    if ADMIN_PASSWORD_MANAGER_TELEGRAM_ID and uid == str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID):
+        return True
+    record = admin_permissions_for(uid) or {}
+    if not record or not record.get("active", False) or record.get("role") == "disabled":
+        return False
+    permissions = normalize_admin_permissions(record.get("permissions"), record.get("role"))
+    return record.get("role") in {"super_admin", "owner"} or "*" in permissions
 
 
 def admin_role_for(user_id):
@@ -485,6 +510,11 @@ def permission_for_route(path, method):
     # Delivery settings and area management.
     if path.startswith(("/api/admin/phase2/delivery-settings", "/api/admin/phase2/delivery-areas", "/api/admin/delivery", "/api/admin/gps")) or path == "/api/delivery-areas" or "gps-pricing" in path:
         return "delivery"
+
+    # Order Dispatch: sending saved customer orders or readymade orders to Telegram.
+    # Existing Order Management permission remains compatible with prior staff assignments.
+    if path in {"/api/admin/order-dispatch/new-design", "/api/admin/order-dispatch/orders"} or (path.startswith("/api/admin/phase2/orders/") and path.endswith(("/send-to-workers", "/send-to-workshop"))):
+        return ["order_dispatch", "orders"]
 
     # Order list, status changes, and deletion (server handlers apply further
     # restrictions where required).
@@ -556,7 +586,7 @@ def admin_emergency_unlock():
         # Keep an in-memory copy for compatibility; signed tokens also work across workers/restarts.
         ADMIN_EMERGENCY_SESSIONS[token] = {"user_id": user_id, "expires": expires_at}
     write_security_event("admin_password_unlock", actor_id=user_id, path=request.path, method="POST", status_code=200)
-    return jsonify(ok=True, token=token, can_change_password=(user_id == ADMIN_PASSWORD_MANAGER_TELEGRAM_ID))
+    return jsonify(ok=True, token=token, can_change_password=is_main_admin_user(user_id))
 
 
 @app.post("/api/admin/emergency/change-password")
@@ -564,7 +594,7 @@ def admin_emergency_change_password():
     user_id, error = admin_user_from_request()
     if error:
         return error
-    if not ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or user_id != ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if not is_main_admin_user(user_id):
         return jsonify(error="Only the designated password manager can change the emergency password."), 403
     if not supabase_enabled():
         return jsonify(error="Password changes require Supabase persistence. Configure SUPABASE_URL and SUPABASE_SECRET_KEY, then apply admin_emergency_password_migration.sql."), 503
@@ -650,28 +680,54 @@ def clean_text(value, limit, field, required=False):
 
 
 def validate_telegram_init_data(init_data):
-    """Validate Telegram Web App initData using Telegram's documented HMAC scheme."""
-    if not BOT_TOKEN or not init_data:
+    """Verify Telegram Mini App initData using the bot-token HMAC scheme.
+
+    Telegram may include a separate Ed25519 ``signature`` parameter for
+    third-party verification. It is not part of the bot-token HMAC data-check
+    string; only the signed fields (excluding hash/signature) are included.
+    """
+    if not BOT_TOKEN:
+        log.error("Telegram Mini App auth unavailable: BOT_TOKEN is not configured on this V2 service")
+        return False, None
+    if not init_data or not isinstance(init_data, str):
+        log.warning("Telegram Mini App auth rejected: X-Telegram-Init-Data header is missing or empty")
         return False, None
     try:
-        pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
+        parsed = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True)
+        # Reject duplicate keys instead of silently accepting an ambiguous payload.
+        if len({key for key, _ in parsed}) != len(parsed):
+            log.warning("Telegram Mini App auth rejected: duplicate initData fields")
+            return False, None
+        pairs = dict(parsed)
         received_hash = pairs.pop("hash", None)
-        if not received_hash or not re.fullmatch(r"[0-9a-f]{64}", received_hash):
+        # Telegram may attach a separate Ed25519 signature. Bot-token HMAC
+        # verification uses the hash field and excludes the signature field.
+        pairs.pop("signature", None)
+        if not received_hash or not re.fullmatch(r"[0-9a-fA-F]{64}", received_hash):
+            log.warning("Telegram Mini App auth rejected: missing or malformed hash")
             return False, None
         auth_date = int(pairs.get("auth_date", "0"))
-        # Reject missing, future-dated, or stale initData (24-hour maximum age).
         now = int(time.time())
         if auth_date <= 0 or auth_date > now + 60 or now - auth_date > 86400:
+            log.warning("Telegram Mini App auth rejected: auth_date outside allowed window")
+            return False, None
+        if not pairs.get("user"):
+            log.warning("Telegram Mini App auth rejected: signed user field missing")
             return False, None
         data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(pairs.items()))
-        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-        calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calculated, received_hash):
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
+        calculated = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calculated, received_hash.lower()):
+            log.warning("Telegram Mini App auth rejected: HMAC mismatch (check V2 BOT_TOKEN belongs to the launching bot)")
             return False, None
         user = json.loads(pairs.get("user", "{}"))
         user_id = user.get("id")
-        return True, str(user_id) if user_id is not None else None
+        if user_id is None:
+            log.warning("Telegram Mini App auth rejected: signed user ID missing")
+            return False, None
+        return True, str(user_id)
     except (ValueError, TypeError, json.JSONDecodeError):
+        log.warning("Telegram Mini App auth rejected: malformed initData payload")
         return False, None
 
 
@@ -688,10 +744,8 @@ def require_auth_from_request():
 
 
 def auth_result(init_data):
-    if not REQUIRE_TELEGRAM_AUTH:
-        return True, None
-    valid, user_id = validate_telegram_init_data(init_data)
-    return valid, user_id
+    """Customer endpoints accept only a verified Telegram Mini App identity."""
+    return validate_telegram_init_data(init_data)
 
 
 def telegram_username_from_init_data(init_data):
@@ -1083,6 +1137,42 @@ def parse_standard_order(data):
     return customer, normalized, total, finish, material, notes
 
 
+@app.get("/api/health")
+def api_health():
+    """Non-secret V2 diagnostics, including proof that BOT_TOKEN belongs to the new bot."""
+    actual_username = None
+    bot_identity_ok = False
+    bot_identity_error = None
+    if BOT_TOKEN:
+        try:
+            response = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=8)
+            payload = response.json()
+            if response.ok and payload.get("ok") and isinstance(payload.get("result"), dict):
+                actual_username = str(payload["result"].get("username") or "").lstrip("@")
+                bot_identity_ok = actual_username.casefold() == BOT_PUBLIC_USERNAME.casefold()
+            else:
+                bot_identity_error = "Telegram rejected the configured bot token"
+        except Exception as exc:
+            bot_identity_error = type(exc).__name__
+    return jsonify({
+        "status": "ok",
+        "service": "ambar-furniture-miniapp-v2",
+        "telegram_bot_token_configured": bool(BOT_TOKEN),
+        "telegram_expected_bot_username": BOT_PUBLIC_USERNAME,
+        "telegram_actual_bot_username": actual_username,
+        "telegram_bot_identity_ok": bot_identity_ok,
+        "telegram_bot_identity_error": bot_identity_error,
+        "webapp_url": WEBAPP_URL,
+        "webapp_url_configured": bool(WEBAPP_URL),
+        "supabase_configured": bool(supabase_enabled()),
+        "telegram_auth_required": REQUIRE_TELEGRAM_AUTH,
+        "web_customer_mode": WEB_CUSTOMER_MODE,
+        "web_customer_auth_available": WEB_CUSTOMER_MODE,
+        "telegram_bot_optional": False,
+        "access_modes": ["telegram_mini_app", "independent_web_app"] if WEB_CUSTOMER_MODE else ["telegram_mini_app"],
+    }), 200
+
+
 @app.get("/")
 def home():
     return send_from_directory(BASE_DIR, "index.html")
@@ -1101,10 +1191,22 @@ def workshop_admin_page():
     return send_from_directory(BASE_DIR, "workshop-admin.html", max_age=0)
 
 
+@app.get("/order-workflow")
+def order_workflow_page():
+    # Dedicated standalone workflow dashboard; the page verifies signed Telegram
+    # identity and main-admin access through /api/auth/me before showing any data.
+    return send_from_directory(BASE_DIR, "workflow.html", max_age=0)
+
+
+@app.get("/workshop-customers")
+def workshop_customers_page():
+    # Customer profiles belong to the Workshop ERP workspace, not the main Admin menu.
+    return send_from_directory(BASE_DIR, "workshop-customers.html", max_age=0)
+
+
 @app.get("/financial-inventory.html")
 def financial_inventory_page():
-    # This is a separately served page opened only inside the Main Admin profile workspace.
-    # It is not launched from Workshop ERP; access is checked by the finance_inventory API permission.
+    # This page is embedded as a modal inside Workshop ERP; access is checked by the Workshop ERP session and finance_inventory permission.
     return send_from_directory(BASE_DIR, "financial-inventory.html", max_age=0)
 
 
@@ -1130,7 +1232,7 @@ def workshop_session_user():
     owner_id = str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or "")
     # Only the main owner needs the emergency-password session. Staff access is
     # authorized by signed Telegram identity + their active Workshop ERP role.
-    if owner_id and str(user_id) == owner_id:
+    if is_main_admin_user(user_id):
         token = request.headers.get("X-Admin-Emergency-Session", "")
         if not valid_emergency_session(token, user_id):
             return None, (jsonify(error="Main admin session expired. Reopen Workshop ERP and verify the emergency admin password."), 423)
@@ -1156,8 +1258,8 @@ def workshop_staff_password_verify():
     user_id, error = verified_telegram_admin()
     if error:
         return error
-    if str(user_id) == str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or ""):
-        return jsonify(error="The main admin uses the emergency administrator password."), 400
+    if is_main_admin_user(user_id):
+        return jsonify(error="Main admins use the emergency administrator password."), 400
     role_data = admin_permissions_for(user_id) or {}
     permissions = normalize_admin_permissions(role_data.get("permissions"), role_data.get("role"))
     if not role_data.get("active", False) or role_data.get("role") == "disabled" or "workshop_erp" not in permissions:
@@ -1181,8 +1283,8 @@ def workshop_staff_password_set():
     user_id, error = admin_user_from_request()
     if error:
         return error
-    if str(user_id) != str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or ""):
-        return jsonify(error="Only the main AMBAR admin can set staff passwords."), 403
+    if not is_main_admin_user(user_id):
+        return jsonify(error="Only a main AMBAR admin can set staff passwords."), 403
     if not supabase_enabled():
         return jsonify(error="Supabase is required to store staff passwords securely."), 503
     data = request.get_json(silent=True) or {}
@@ -1216,7 +1318,7 @@ def workshop_assignments_save():
     if error:
         return error
     owner_id = str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or "")
-    if not owner_id or str(user_id) != owner_id:
+    if not is_main_admin_user(user_id):
         return jsonify(error="Only the main AMBAR admin can confirm Workshop ERP assignments."), 403
     if not supabase_enabled():
         return jsonify(error="Shared Supabase storage is not configured."), 503
@@ -1236,7 +1338,7 @@ def workshop_assignments_save():
         if isinstance(value, str) and value.startswith("workshop_stage:"):
             return value.split(":", 1)[1] in allowed_workshop_stages
         return False
-    if not target.isdigit() or target == owner_id:
+    if not target.isdigit() or target == owner_id or target == str(user_id):
         return jsonify(error="Choose a valid staff admin."), 400
     if not isinstance(permissions, list) or any(not valid_task_permission(p) for p in permissions):
         return jsonify(error="Select valid Workshop ERP functions and production areas."), 400
@@ -1329,7 +1431,7 @@ def workshop_record_delete():
     if observer_denied:
         return observer_denied
     owner_id = str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or "")
-    is_owner = bool(owner_id and str(user_id) == owner_id)
+    is_owner = is_main_admin_user(user_id)
     if not supabase_enabled():
         return jsonify(error="Shared Supabase storage is not configured."), 503
     data = request.get_json(silent=True) or {}
@@ -1372,7 +1474,12 @@ def workshop_record_delete():
             elif collection == "orders":
                 state["products"] = [p for p in state.get("products", []) if str(p.get("workOrder", "")) != str(item.get("serial") or item.get("productId") or "")]
             elif collection == "products":
-                state["sales"] = [x for x in state.get("sales", []) if str(x.get("id")) != record_id]
+                product_record_id = str(item.get("id"))
+                product_id = str(item.get("productId") or item.get("serial") or "")
+                state["sales"] = [x for x in state.get("sales", []) if not (
+                    str(x.get("productRecordId") or x.get("id")) == product_record_id
+                    or (product_id and str(x.get("productId") or x.get("serial") or "") == product_id)
+                )]
             elif collection == "materials":
                 state["materialTransactions"] = [x for x in state.get("materialTransactions", []) if str(x.get("materialId")) != record_id]
             label = (item.get("productId") or item.get("serial") or "work order") if collection == "orders" else (item.get("model") or "record") if collection in {"products", "sales"} else item.get("name", "material") if collection == "materials" else item.get("materialName", "material movement")
@@ -1630,7 +1737,7 @@ def _daily_report_pdf_bytes(data):
 
 
 def _verify_daily_report_permission(user_id):
-    is_owner = str(user_id) == str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or "")
+    is_owner = is_main_admin_user(user_id)
     if is_owner:
         return True
     rows = supabase_request("GET", "/rest/v1/workshop_erp_state", params={"select":"state", "id":"eq.1", "limit":"1"}) or []
@@ -1662,6 +1769,8 @@ def workshop_daily_report_pdf():
     except Exception as exc:
         log.exception("Could not build Workshop ERP daily PDF")
         return jsonify(error=str(exc)[:300] or "Could not generate the PDF report."), 500
+    if not isinstance(pdf_bytes, (bytes, bytearray)) or not bytes(pdf_bytes).startswith(b"%PDF-") or len(pdf_bytes) < 500:
+        return jsonify(error="The report generator did not produce a valid PDF. Please refresh the report and retry."), 500
     if len(pdf_bytes) > 7 * 1024 * 1024:
         return jsonify(error="The PDF report is too large to download. Reduce the selected date's report size and retry."), 413
     filename = secure_filename(f"ambar-daily-report-{data.get('selectedDate','date')}-{data.get('preparedBy','admin')}.pdf") or "ambar-daily-report.pdf"
@@ -1694,6 +1803,8 @@ def workshop_daily_report_send():
     except Exception as exc:
         log.exception("Could not build PDF for Telegram send")
         return jsonify(error=str(exc)[:300] or "Could not generate the PDF report."), 500
+    if not isinstance(uploaded_bytes, (bytes, bytearray)) or not bytes(uploaded_bytes).startswith(b"%PDF-") or len(uploaded_bytes) < 500:
+        return jsonify(error="The report generator did not produce a valid PDF. Please refresh the report and retry."), 500
     upload_mime = "application/pdf"
     if len(uploaded_bytes) > 7 * 1024 * 1024:
         return jsonify(error="The daily report is too large to send. Reduce the selected date's report size and retry."), 413
@@ -1775,7 +1886,7 @@ def workshop_state_reset():
     if observer_denied:
         return observer_denied
     owner_id = str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or "")
-    if not owner_id or str(user_id) != owner_id:
+    if not is_main_admin_user(user_id):
         write_security_event("workshop_state_reset_denied", actor_id=str(user_id), path=request.path, method="POST", status_code=403)
         return jsonify(error="Only the main AMBAR admin can reset all Workshop ERP data."), 403
     body = request.get_json(silent=True) or {}
@@ -1811,9 +1922,23 @@ def workshop_state_reset():
             updated = supabase_request("POST", "/rest/v1/workshop_erp_state", params={"on_conflict": "id"}, payload=payload,
                 extra_headers={"Prefer": "resolution=merge-duplicates,return=representation"}) or []
             row = updated[0] if updated else payload
+        # Remove only finance rows that were auto-generated from Workshop ERP sales.
+        # Manual finance ledger entries are intentionally preserved. With the sales
+        # array now empty, dashboard refresh cannot recreate the removed entries.
+        finance_cleanup_warning = None
+        try:
+            supabase_request("DELETE", "/rest/v1/ambar_finance_entries",
+                params={"source_ref": "like.workshop-sale:*"},
+                extra_headers={"Prefer": "return=minimal"})
+        except Exception as cleanup_exc:
+            finance_cleanup_warning = "Workshop ERP data was reset, but ERP-linked finance entries could not be cleared. Check the finance table and retry cleanup."
+            log.exception("Workshop ERP reset completed but linked finance cleanup failed: %s", cleanup_exc)
         write_security_event("workshop_state_reset", actor_id=str(user_id), path=request.path, method="POST", status_code=200,
-                             details={"preserved_assignments": len(reset_state["workshopAssignments"])})
-        return jsonify(ok=True, state=reset_state, updated_at=row.get("updated_at", now), updated_by=row.get("updated_by", str(user_id)))
+                             details={"preserved_assignments": len(reset_state["workshopAssignments"]), "finance_cleanup_warning": bool(finance_cleanup_warning)})
+        response = {"ok": True, "state": reset_state, "updated_at": row.get("updated_at", now), "updated_by": row.get("updated_by", str(user_id))}
+        if finance_cleanup_warning:
+            response["warning"] = finance_cleanup_warning
+        return jsonify(response)
     except Exception:
         log.exception("Could not reset shared Workshop ERP data")
         return jsonify(error="Could not reset shared Workshop ERP data. Check the Supabase connection and retry."), 503
@@ -1843,7 +1968,7 @@ def workshop_state_save():
         current_state = (current_rows[0] or {}).get("state") if current_rows else None
         if isinstance(current_state, dict):
             owner_id = str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or "")
-            is_owner = bool(owner_id and str(user_id) == owner_id)
+            is_owner = is_main_admin_user(user_id)
             if not is_owner:
                 def identity_key_for(collection):
                     return {"orders":"serial","products":"id","materials":"id","materialTransactions":"id","sales":"id"}.get(collection, "id")
@@ -1853,7 +1978,7 @@ def workshop_state_save():
                     if val is None and collection == "orders": val = item.get("productId")
                     return None if val is None else str(val)
                 if state.get("workshopAssignments", []) != current_state.get("workshopAssignments", []):
-                    return jsonify(error="Only the main AMBAR admin can change Workshop ERP task assignments."), 403
+                    return jsonify(error="Only a main AMBAR admin can change Workshop ERP task assignments."), 403
                 assignment = next((x for x in (current_state.get("workshopAssignments", []) if isinstance(current_state.get("workshopAssignments", []), list) else []) if isinstance(x, dict) and str(x.get("telegram_user_id")) == str(user_id)), {})
                 permissions = set(assignment.get("permissions", []) if isinstance(assignment.get("permissions", []), list) else [])
                 if "*" not in permissions:
@@ -1899,15 +2024,43 @@ def workshop_state_save():
                     after_sales = state.get("sales", []) if isinstance(state.get("sales", []), list) else []
                     before_sales_ids = {item_id(x, "sales") for x in before_sales}
                     added_sales = [x for x in after_sales if item_id(x, "sales") not in before_sales_ids]
+                    before_restock_history = current_state.get("restockHistory", []) if isinstance(current_state.get("restockHistory", []), list) else []
+                    after_restock_history = state.get("restockHistory", []) if isinstance(state.get("restockHistory", []), list) else []
+                    before_restock_ids = {str(x.get("restockId") or x.get("restock_id") or "") for x in before_restock_history if isinstance(x, dict)}
+                    added_restock_events = [x for x in after_restock_history if isinstance(x, dict) and str(x.get("restockId") or x.get("restock_id") or "") not in before_restock_ids]
                     sale_fields = ("status","customer","phone","rep","soldAt","soldAtISO","paymentStatus","saleNotes","paymentFullyPaidAt","paymentNote","price")
                     def product_special(new, old):
                         if old is None:
                             return str(new.get("workOrder") or "") in new_workshop_stages and "workshop_advance" in permissions
+                        old_status = str(old.get("status") or "").upper()
+                        new_status = str(new.get("status") or "").upper()
+                        if old_status != new_status:
+                            if old_status != "SOLD" and new_status == "SOLD":
+                                linked_sale = any(
+                                    str(x.get("productRecordId") or x.get("id")) == str(new.get("id"))
+                                    or (str(new.get("productId") or new.get("serial") or "") and str(x.get("productId") or x.get("serial") or "") == str(new.get("productId") or new.get("serial") or ""))
+                                    for x in added_sales
+                                )
+                                if "sales_add" not in permissions or not linked_sale:
+                                    raise PermissionError("A unit can only be marked SOLD by the Record sale action with a matching Sales Archive entry.")
+                                return True
+                            if old_status == "SOLD" and new_status == "AVAILABLE":
+                                product_key = str(new.get("productId") or new.get("serial") or "")
+                                event_key = str(new.get("restockEventId") or "")
+                                valid_restock = any(
+                                    str(x.get("productId") or x.get("product_id") or "") == product_key
+                                    and (not event_key or str(x.get("restockId") or x.get("restock_id") or "") == event_key)
+                                    for x in added_restock_events
+                                )
+                                if "inventory_edit" not in permissions or not valid_restock:
+                                    raise PermissionError("A sold unit can only return to AVAILABLE through the Restock action with a matching restock history record.")
+                                return True
+                            raise PermissionError("Use Record sale or Restock to change a finished unit's status.")
                         if not any(old.get(k) != new.get(k) for k in sale_fields):
                             return False
-                        if old.get("status") != "SOLD" and new.get("status") == "SOLD":
-                            return "sales_add" in permissions and any(str(x.get("id")) == str(new.get("id")) for x in added_sales)
-                        return old.get("status") == "SOLD" and new.get("status") == "SOLD" and ("sales_edit" in permissions or ("sales_add" in permissions and any(str(x.get("id")) == str(new.get("id")) for x in added_sales)))
+                        if old_status == "SOLD" and new_status == "SOLD":
+                            return "sales_edit" in permissions or ("sales_add" in permissions and any(str(x.get("productRecordId") or x.get("id")) == str(new.get("id")) for x in added_sales))
+                        return False
                     check_collection("products", "inventory_add", "inventory_edit", product_special)
                     # Material receipts/cuts authorize the associated stock changes; descriptive edits remain separate.
                     check_collection("materials", "materials_add", "materials_edit", lambda new, old: bool(old and all(old.get(k) == new.get(k) for k in ("name","unit","threshold","supplier","notes")) and (old.get("stock") != new.get("stock") or old.get("cost") != new.get("cost")) and added_tx and all(("materials_receive" if x.get("type") == "receipt" else "materials_cut") in permissions for x in added_tx)))
@@ -1940,8 +2093,15 @@ def workshop_state_save():
             rows = supabase_request("POST", "/rest/v1/workshop_erp_state", params={"on_conflict": "id"}, payload=payload,
                 extra_headers={"Prefer": "resolution=merge-duplicates,return=representation"}) or []
             row = rows[0] if rows else payload
-        write_security_event("workshop_state_saved", actor_id=user_id, path=request.path, method="POST", status_code=200)
-        return jsonify(ok=True, updated_at=row.get("updated_at", now), updated_by=row.get("updated_by", str(user_id)))
+        finance_sync = {"synced": 0, "receivables": 0}
+        try:
+            finance_sync = sync_workshop_sales_into_finance(state, user_id)
+        except Exception:
+            # Keep the workshop save successful; report the sync failure to logs so it can be retried on Finance refresh.
+            log.exception("Workshop ERP saved but automatic Finance sale sync failed")
+        write_security_event("workshop_state_saved", actor_id=user_id, path=request.path, method="POST", status_code=200,
+                             details={"finance_synced": finance_sync.get("synced", 0), "finance_receivables": finance_sync.get("receivables", 0)})
+        return jsonify(ok=True, updated_at=row.get("updated_at", now), updated_by=row.get("updated_by", str(user_id)), finance_sync=finance_sync)
     except Exception:
         log.exception("Could not save shared Workshop ERP state")
         return jsonify(error="Could not save shared workshop data. Check the Supabase migration and connection."), 503
@@ -1951,7 +2111,7 @@ def get_gps_delivery_settings():
     """Return the single GPS pricing configuration, or None when not configured."""
     if not supabase_enabled():
         return None
-    rows = supabase_request("GET", "/rest/v1/delivery_settings", params={"select":"id,origin_lat,origin_lon,base_fee_etb,price_per_km,active", "id":"eq.1", "limit":"1"}) or []
+    rows = supabase_request("GET", "/rest/v1/delivery_settings", params={"select":"id,origin_lat,origin_lon,price_per_km,active", "id":"eq.1", "limit":"1"}) or []
     return rows[0] if rows else None
 
 
@@ -1970,7 +2130,7 @@ def phase2_get_delivery_settings():
     _, error = admin_user_from_request()
     if error: return error
     try:
-        return jsonify(settings=get_gps_delivery_settings() or {"id":1,"origin_lat":None,"origin_lon":None,"price_per_km":10,"base_fee_etb":50,"active":False})
+        return jsonify(settings=get_gps_delivery_settings() or {"id":1,"origin_lat":None,"origin_lon":None,"price_per_km":0,"base_fee_etb":0,"active":False})
     except Exception:
         log.exception("Could not load GPS delivery settings")
         return jsonify(error="Could not load GPS delivery settings. Run the updated Phase 2 SQL migration."), 503
@@ -1984,11 +2144,11 @@ def phase2_save_delivery_settings():
     data = request.get_json(silent=True) or {}
     try:
         lat, lon, rate = float(data.get("origin_lat")), float(data.get("origin_lon")), float(data.get("price_per_km"))
-        base_fee = float(data.get("base_fee_etb", 50))
+        base_fee = 0.0  # Legacy UI/database field retained for compatibility; no fixed fee is charged.
         if not (-90 <= lat <= 90 and -180 <= lon <= 180) or rate < 0 or base_fee < 0: raise ValueError()
     except (TypeError, ValueError):
         return jsonify(error="Enter valid shop GPS coordinates and a non-negative price per kilometer."), 400
-    payload = {"id":1,"origin_lat":lat,"origin_lon":lon,"price_per_km":rate,"base_fee_etb":base_fee,"active":bool(data.get("active", True)),"updated_at":dt.datetime.now(dt.timezone.utc).isoformat()}
+    payload = {"id":1,"origin_lat":lat,"origin_lon":lon,"price_per_km":rate,"base_fee_etb":0,"active":bool(data.get("active", True)),"updated_at":dt.datetime.now(dt.timezone.utc).isoformat()}
     try:
         existing = supabase_request("GET", "/rest/v1/delivery_settings", params={"select":"id","id":"eq.1","limit":"1"}) or []
         rows = supabase_request("PATCH", "/rest/v1/delivery_settings", params={"id":"eq.1"}, payload=payload) if existing else supabase_request("POST", "/rest/v1/delivery_settings", payload=payload)
@@ -2006,7 +2166,7 @@ def public_delivery_areas():
     try:
         rows = supabase_request("GET", "/rest/v1/delivery_areas", params={"select":"id,area_name,fee_etb,estimated_days", "active":"eq.true", "order":"area_name.asc"}) or []
         gps = get_gps_delivery_settings()
-        return jsonify(areas=rows, configured=True, gps_settings=({"active":bool(gps.get("active")),"origin_lat":gps.get("origin_lat"),"origin_lon":gps.get("origin_lon"),"base_fee_etb":float(gps.get("base_fee_etb",50) or 0),"price_per_km":float(gps.get("price_per_km",10) or 0)} if gps else {"active":False,"origin_lat":None,"origin_lon":None,"base_fee_etb":50,"price_per_km":10}))
+        return jsonify(areas=rows, configured=True, gps_settings=({"active":bool(gps.get("active")),"origin_lat":gps.get("origin_lat"),"origin_lon":gps.get("origin_lon"),"base_fee_etb":0,"price_per_km":float(gps.get("price_per_km",10) or 0)} if gps else {"active":False,"origin_lat":None,"origin_lon":None,"base_fee_etb":50,"price_per_km":10}))
     except Exception:
         log.exception("Could not load delivery areas")
         return jsonify(error="Delivery fees are temporarily unavailable."), 503
@@ -2014,9 +2174,9 @@ def public_delivery_areas():
 
 @app.route("/api/my-app-state", methods=["GET", "PUT"])
 def my_app_state():
-    """Synchronize a customer's cart and favorites across devices using signed Telegram identity."""
+    """Synchronize cart and favorites for the current authenticated customer session."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data)
+    valid, user_id = auth_result(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to sync your account across devices."), 401
     if not supabase_enabled():
@@ -2057,11 +2217,95 @@ def my_app_state():
         return jsonify(error="Could not synchronize cart and favorites. Check the supplied Supabase SQL migration."), 503
 
 
+@app.get("/api/admin/customer-favorites-report")
+def admin_customer_favorites_report():
+    """Main-admin report of customers' currently saved favorite products."""
+    user_id, error = admin_user_from_request()
+    if error: return error
+    if not is_main_admin_user(user_id):
+        return jsonify(error="Only the Main Admin can view the complete customer favorites report."), 403
+    if not supabase_enabled():
+        return jsonify(error="Supabase is required for the customer favorites report."), 503
+    try:
+        states = supabase_request("GET", "/rest/v1/customer_app_state", params={
+            "select":"telegram_user_id,favorites,updated_at", "order":"updated_at.desc", "limit":"10000"
+        }) or []
+        try:
+            profiles = supabase_request("GET", "/rest/v1/customer_profiles", params={
+                "select":"customer_id,full_name,phone,location,telegram_user_id,telegram_username,customer_type,customer_status,created_at", "limit":"10000"
+            }) or []
+        except Exception:
+            log.warning("Customer profiles unavailable for favorites report; showing verified Telegram IDs only.")
+            profiles = []
+        profile_by_telegram = {str(x.get("telegram_user_id")): x for x in profiles if x.get("telegram_user_id")}
+        try:
+            product_rows = supabase_list_products(include_inactive=True)
+        except Exception:
+            log.exception("Product catalogue unavailable for favorites report")
+            product_rows = []
+        product_by_id = {}
+        for product in product_rows:
+            pid = str(product.get("id") or product.get("product_id") or product.get("sku") or "")
+            if not pid: continue
+            product_by_id[pid] = {
+                "product_id": pid,
+                "name": product.get("name") or product.get("title") or product.get("product_name") or "Unnamed product",
+                "name_am": product.get("name_am") or "",
+                "category": product.get("category") or product.get("product_type") or "Uncategorized",
+                "price_etb": product.get("price") if product.get("price") is not None else product.get("price_etb"),
+                "description": product.get("description") or "",
+                "specifications": product.get("specifications") if isinstance(product.get("specifications"), dict) else {},
+                "stock_status": product.get("stock_status") or ("in_stock" if product.get("active", True) else "inactive"),
+                "active": bool(product.get("active", True)),
+                "pinned": bool(product.get("pinned", False)),
+                "image_url": product.get("image_url") or (product.get("images", [None])[0] if isinstance(product.get("images"), list) and product.get("images") else ""),
+            }
+        customers = []
+        product_counts = {}
+        total_favorites = 0
+        for state in states:
+            telegram_id = str(state.get("telegram_user_id") or "")
+            favorites = state.get("favorites") if isinstance(state.get("favorites"), list) else []
+            unique_ids = list(dict.fromkeys(str(x) for x in favorites if x is not None and str(x).strip()))
+            if not unique_ids: continue
+            profile = profile_by_telegram.get(telegram_id, {})
+            favorite_products = []
+            for pid in unique_ids:
+                product = product_by_id.get(pid, {"product_id":pid,"name":"Product details unavailable","category":"Unknown","price_etb":None,"description":"","specifications":{},"stock_status":"unknown","active":None,"pinned":False,"image_url":""})
+                favorite_products.append(product)
+                product_counts.setdefault(pid, {"product":product, "favorite_count":0})["favorite_count"] += 1
+                total_favorites += 1
+            customers.append({
+                "telegram_user_id":telegram_id,
+                "customer_id":profile.get("customer_id") or "",
+                "name":profile.get("full_name") or "Telegram customer",
+                "username":profile.get("telegram_username") or "",
+                "phone":profile.get("phone") or "",
+                "location":profile.get("location") or "",
+                "customer_type":profile.get("customer_type") or "",
+                "customer_status":profile.get("customer_status") or "",
+                "profile_created_at":profile.get("created_at") or "",
+                "favorites_count":len(unique_ids),
+                "favorites_updated_at":state.get("updated_at") or "",
+                "favorites":favorite_products,
+            })
+        customers.sort(key=lambda x:(-x["favorites_count"], x["name"].lower()))
+        popular = sorted(product_counts.values(), key=lambda x:(-x["favorite_count"], str(x["product"].get("name") or "").lower()))
+        return jsonify(ok=True, customers=customers, popular_products=popular,
+                       summary={"customers_with_favorites":len(customers),"favorite_selections":total_favorites,
+                                 "distinct_products_favorited":len(product_counts),"customers_with_profile":sum(1 for c in customers if c.get("customer_id")),
+                                 "generated_at":dt.datetime.now(dt.timezone.utc).isoformat(),
+                                 "scope":"Current saved favorites per customer; not a historical add/remove event log."})
+    except Exception:
+        log.exception("Could not build customer favorites report")
+        return jsonify(error="Could not load customer favorites. Confirm customer_app_state and product catalogue tables are available in the staging database."), 503
+
+
 @app.post("/api/my-orders/<reference>/confirm-delivered")
 def confirm_delivered_order(reference):
     """Let the authenticated customer confirm actual receipt even if staff have not yet marked Delivered."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data)
+    valid, user_id = auth_result(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to confirm delivery."), 401
     if not supabase_enabled():
@@ -2099,11 +2343,11 @@ def confirm_delivered_order(reference):
 @app.get("/api/my-orders")
 def my_orders():
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    # Order ownership must always come from Telegram's signed initData, even if
-    # REQUIRE_TELEGRAM_AUTH is disabled for local development elsewhere in the app.
-    valid, user_id = validate_telegram_init_data(init_data)
+    # Ownership is scoped to the signed browser session in web-only mode, or
+    # to Telegram's signed identity when Telegram authentication is enabled.
+    valid, user_id = auth_result(init_data)
     if not valid or not user_id:
-        return jsonify(error="Open AMBAR from its Telegram bot to view your orders. If you are already in Telegram, close and reopen the Mini App."), 401
+        return jsonify(error="Your customer session expired. Refresh the page and try again."), 401
     if not supabase_enabled():
         return jsonify(orders=[], configured=False)
     try:
@@ -2118,7 +2362,7 @@ def my_orders():
 def cancel_my_order(reference):
     """Allow a customer to cancel only their own order before preparation starts."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data)
+    valid, user_id = auth_result(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to manage your orders."), 401
     if not supabase_enabled():
@@ -2238,12 +2482,141 @@ ADMIN_SECTION_BUTTONS = [
     {"id":"tracking","label":"Order Tracking","tab":"tracking","permission":"orders"},
     {"id":"delivery","label":"Delivery Fees","tab":"delivery","permission":"delivery"},
     {"id":"dashboard","label":"Sales Dashboard","tab":"dashboard","permission":"dashboard"},
+    {"id":"favoritesreport","label":"⭐ Customer Favorites Report","tab":"favoritesreport","permission":"customers"},
     {"id":"service","label":"Customer Service","tab":"service","permission":"service"},
     {"id":"customers","label":"Customers","tab":"customers","permission":"customers"},
     {"id":"security","label":"Security Reports","tab":"security","permission":"security"},
     {"id":"admins","label":"Admin Management","tab":"admins","permission":"admin_management"},
     {"id":"adminpassword","label":"🔑 Change Admin Password","tab":"adminpassword","permission":"admin_management"},
 ]
+
+@app.get("/api/interface-settings")
+def public_interface_settings_get():
+    """Expose only the published visual configuration, never admin history or secrets."""
+    if not supabase_enabled():
+        return jsonify(settings={})
+    try:
+        rows = supabase_request("GET", "/rest/v1/ambar_interface_settings", params={"select":"settings", "id":"eq.1", "limit":"1"}) or []
+        return jsonify(settings=(rows[0].get("settings") or {}) if rows else {})
+    except Exception:
+        log.exception("Could not load published interface settings")
+        return jsonify(settings={})
+
+@app.get("/api/admin/interface-settings")
+def admin_interface_settings_get():
+    user_id, error = admin_user_from_request()
+    if error: return error
+    if not is_main_admin_user(user_id):
+        return jsonify(error="Only Main Admin 1 or Main Admin 2 can edit the published interface."), 403
+    if not supabase_enabled(): return jsonify(error="Supabase is required to save interface settings."), 503
+    try:
+        rows = supabase_request("GET", "/rest/v1/ambar_interface_settings", params={"select":"settings,version_history,updated_at", "id":"eq.1", "limit":"1"}) or []
+        row = rows[0] if rows else {}
+        return jsonify(settings=row.get("settings") or {}, history=row.get("version_history") or [], updated_at=row.get("updated_at"), needs_migration=not bool(rows))
+    except Exception:
+        log.exception("Could not load interface designer settings")
+        return jsonify(error="Could not load interface settings. Apply AMBAR_INTERFACE_DESIGNER_MIGRATION.sql."), 503
+
+@app.post("/api/admin/interface-settings")
+def admin_interface_settings_save():
+    user_id, error = admin_user_from_request()
+    if error: return error
+    if not is_main_admin_user(user_id):
+        return jsonify(error="Only Main Admin 1 or Main Admin 2 can publish interface settings."), 403
+    if not supabase_enabled(): return jsonify(error="Supabase is required to publish interface settings."), 503
+    data = request.get_json(silent=True) or {}
+    settings = data.get("settings")
+    if not isinstance(settings, dict): return jsonify(error="Send a valid settings object."), 400
+    if len(json.dumps(settings, ensure_ascii=False)) > 200000: return jsonify(error="Interface settings are too large."), 413
+    # Strictly whitelist editable visual fields; never accept HTML, scripts, URLs, or business logic.
+    def color(value, fallback):
+        value = str(value or fallback)
+        return value if re.fullmatch(r"#[0-9a-fA-F]{6}", value) else fallback
+    incoming_a = settings.get("appearance") if isinstance(settings.get("appearance"), dict) else {}
+    incoming_l = settings.get("labels") if isinstance(settings.get("labels"), dict) else {}
+    incoming_v = settings.get("visibility") if isinstance(settings.get("visibility"), dict) else {}
+    defaults = {"background":"#f7f8fa","text":"#20242a","accent":"#ff7417","card":"#ffffff","border":"#e1e5eb","buttonText":"#171717","opacity":0.76,"blur":18,"radius":19,"fontScale":1}
+    appearance = {key:color(incoming_a.get(key), fallback) for key,fallback in defaults.items() if isinstance(fallback,str)}
+    for key, low, high, fallback in [("opacity",0.25,0.95,0.76),("blur",0,32,18),("radius",8,32,19),("fontScale",0.9,1.2,1)]:
+        try: appearance[key] = max(low, min(high, float(incoming_a.get(key, fallback))))
+        except (TypeError, ValueError): appearance[key] = fallback
+    label_defaults = {"storeTitle":"AMBAR Furniture","tagline":"Modern living · Timeless design","trackOrders":"Track Orders","categoryHint":"Tap any product to see photos and specifications.","customOrder":"＋ Send a custom product photo","about":"About AMBAR Furniture"}
+    labels = {key:clean_text(incoming_l.get(key, fallback), 150, "Interface label", False) for key,fallback in label_defaults.items()}
+    content_defaults = {
+      "deliveryTitle":"Delivery arrangements","deliveryTitleAm":"የማድረሻ ዝግጅት","deliverySubtitle":"A considered delivery experience, tailored to you.","deliverySubtitleAm":"ለእርስዎ የተዘጋጀ የማድረስ አገልግሎት።",
+      "pickupTitle":"Pickup","pickupTitleAm":"በራስዎ መውሰድ","pickupDesc":"Collect your order yourself · No delivery fee","pickupDescAm":"ትዕዛዝዎን በራስዎ ይውሰዱ · የማድረሻ ክፍያ የለም",
+      "deliveryOptionTitle":"Delivery","deliveryOptionTitleAm":"ማድረስ","deliveryOptionDesc":"Our team brings your furniture to your selected address.","deliveryOptionDescAm":"ቡድናችን የቤት ዕቃዎን ወደመረጡት አድራሻ ያደርሳል።",
+      "deliveryAddressLabel":"Delivery address / landmark *","deliveryAddressLabelAm":"የማድረሻ አድራሻ / መለያ ቦታ *","useGpsLabel":"📍 Use my current GPS","useGpsLabelAm":"📍 ያሁኑን GPS ይጠቀሙ","selectMapLabel":"🗺️ Select on map","selectMapLabelAm":"🗺️ በካርታ ላይ ይምረጡ",
+      "locationStatus":"Use GPS or tap the map to place a pin. You can add a landmark above.","locationStatusAm":"GPS ይጠቀሙ ወይም በካርታው ላይ ፒን ያስቀምጡ። ከላይ መለያ ቦታ ማከል ይችላሉ።","mapSearchPlaceholder":"Search map by place or address","mapSearchPlaceholderAm":"በቦታ ወይም በአድራሻ ካርታ ይፈልጉ","mapSearchButton":"Search","mapSearchButtonAm":"ፈልግ",
+      "distanceText":"Choose a location to calculate distance and delivery fee.","distanceTextAm":"ርቀትና የማድረሻ ክፍያ ለማስላት ቦታ ይምረጡ።","summaryTitle":"YOUR ORDER SUMMARY","summaryTitleAm":"የትዕዛዝዎ ማጠቃለያ","subtotalLabel":"Products subtotal","subtotalLabelAm":"የምርቶች ንዑስ ድምር","deliveryFeeLabel":"Delivery fee","deliveryFeeLabelAm":"የማድረሻ ክፍያ","estimatedTotalLabel":"Estimated total","estimatedTotalLabelAm":"ግምታዊ ጠቅላላ","pickupNote":"Customer pickup selected — no delivery fee.","pickupNoteAm":"ደንበኛው በራሱ ይወስዳል — የማድረሻ ክፍያ የለም።",
+      "paymentChoiceTitle":"Choose your first payment","paymentChoiceTitleAm":"የመጀመሪያ ክፍያዎን ይምረጡ","paymentSummaryTitle":"PAYMENT BREAKDOWN","paymentSummaryTitleAm":"የክፍያ ዝርዝር","paymentFinalNote":"Final amounts are confirmed by AMBAR when your order is reviewed.","paymentFinalNoteAm":"ትዕዛዝዎ ሲገመገም የመጨረሻ መጠኖች በAMBAR ይረጋገጣሉ።",
+      "aboutTitle":"AMBAR FURNITURE","aboutTitleAm":"AMBAR FURNITURE","aboutSubtitle":"Modern Footwear Storage & Custom Furniture","aboutSubtitleAm":"ዘመናዊ የጫማ ማስቀመጫና በትዕዛዝ የሚሠሩ የቤት ዕቃዎች","aboutIntro":"At Ambar Furniture, we design modern shoe storage solutions that bring order, elegance, and space-saving efficiency to your home.","aboutIntroAm":"በAmbar Furniture ውስጥ ሥርዓት፣ ውበትና ቦታ ቆጣቢነት የሚያመጡ ዘመናዊ የጫማ ማስቀመጫዎችን እንነድፋለን።","aboutCustomTitle":"Custom Furniture Beyond Footwear Storage","aboutCustomTitleAm":"ከጫማ ማስቀመጫ በላይ በትዕዛዝ የሚሠሩ የቤት ዕቃዎች","aboutCustomText":"We craft a wide variety of custom furniture tailored to your needs and style preferences.","aboutCustomTextAm":"ከፍላጎትዎና ከቅጥ ምርጫዎ ጋር የሚስማሙ የተለያዩ በትዕዛዝ የሚሠሩ የቤት ዕቃዎችን እንሠራለን።","aboutWhyTitle":"Why Choose Ambar Furniture","aboutWhyTitleAm":"ለምን Ambar Furnitureን ይመርጣሉ","aboutPromiseTitle":"Our Promise","aboutPromiseTitleAm":"ቃል ኪዳናችን","aboutPromiseText":"Simple organization, modern design, and flexible custom craftsmanship crafted to elevate your home.","aboutPromiseTextAm":"ቤትዎን የሚያሳምሩ ቀላል አደረጃጀት፣ ዘመናዊ ንድፍና በትዕዛዝ የሚሠሩ ዕቃዎች።",
+      "checkoutHeading":"Delivery & Payment","checkoutHeadingAm":"ማድረሻ እና ክፍያ","checkoutIntro":"Choose delivery and payment.","checkoutIntroAm":"የማድረሻና የክፍያ ዘዴ ይምረጡ።","chapaButton":"Pay with Chapa","chapaButtonAm":"በChapa ይክፈሉ","payLaterButton":"Pay Later","payLaterButtonAm":"በኋላ ይክፈሉ","backToProductsLabel":"← Back to products","backToProductsLabelAm":"← ወደ ምርቶች ተመለስ",
+      "aboutSecondParagraph":"Whether you need personalized living room pieces, bedroom sets, or bespoke storage solutions, our team works with you to bring your vision to life.","aboutSecondParagraphAm":"ለሳሎን፣ ለመኝታ ክፍል ወይም ለልዩ ማስቀመጫ መፍትሔዎች ቡድናችን ሐሳብዎን እውን ለማድረግ ከእርስዎ ጋር ይሠራል።",
+      "benefit1Title":"Space-Saving Engineering:","benefit1TitleAm":"ቦታ ቆጣቢ ንድፍ፦","benefit1Text":"Ultra-slim profiles designed for narrow hallways, foyers, and closets.","benefit1TextAm":"በጠባብ ኮሪደሮችና መግቢያዎች የሚስማሙ ቀጭን ዲዛይኖች።",
+      "benefit2Title":"Smart & Flexible Organization:","benefit2TitleAm":"ብልህና ተለዋዋጭ አደረጃጀት፦","benefit2Text":"Flexible shelving for everyday sneakers, heels, and boots.","benefit2TextAm":"ለስኒከር፣ ለተረከዝ ጫማና ለቦት ተለዋዋጭ መደርደሪያዎች።",
+      "benefit3Title":"Tailored Customization:","benefit3TitleAm":"ለእርስዎ የተስተካከለ አሠራር፦","benefit3Text":"Custom dimensions and finishes matched to your needs.","benefit3TextAm":"ከፍላጎትዎ ጋር የሚስማሙ መጠኖችና አጨራረሶች።",
+      "benefit4Title":"Premium Quality Materials:","benefit4TitleAm":"ከፍተኛ ጥራት ያላቸው ቁሳቁሶች፦","benefit4Text":"Durable materials and finishes designed for daily use.","benefit4TextAm":"ለዕለታዊ አጠቃቀም የተዘጋጁ ዘላቂ ቁሳቁሶችና አጨራረሶች።",
+      "benefit5Title":"Integrated Ventilation:","benefit5TitleAm":"የአየር ዝውውር ያለው ንድፍ፦","benefit5Text":"Airflow-friendly designs help keep shoes fresh.","benefit5TextAm":"አየር የሚያስገቡ ዲዛይኖች ጫማዎች ትኩስ እንዲቆዩ ያግዛሉ።",
+      "benefit6Title":"Functional Modern Aesthetics:","benefit6TitleAm":"ተግባራዊ ዘመናዊ ውበት፦","benefit6Text":"Clean lines and modern finishes complement your home.","benefit6TextAm":"ንጹህ መስመሮችና ዘመናዊ አጨራረሶች ቤትዎን ያስውባሉ።",
+      "storeFooterNote":"Before you submit, double-check your selected products and order details.","storeFooterNoteAm":"ከማስገባትዎ በፊት የመረጧቸውን ምርቶችና የትዕዛዝ ዝርዝሮች ያረጋግጡ።","measurementsLabel":"MEASUREMENTS","measurementsLabelAm":"መጠኖች","capacityLabel":"CAPACITY","capacityLabelAm":"አቅም","materialLabel":"MATERIAL","materialLabelAm":"ቁሳቁስ","categoryLabel":"PRODUCT CATEGORY","categoryLabelAm":"የምርት ምድብ"
+    }
+    incoming_content = settings.get("content") if isinstance(settings.get("content"), dict) else {}
+    content = {key:clean_text(incoming_content.get(key, fallback), 500, "Interface page copy", False) for key,fallback in content_defaults.items()}
+    visibility = {key:bool(incoming_v.get(key, True)) for key in ("favorites","service","about","track")}
+    incoming_defaults = settings.get("defaults") if isinstance(settings.get("defaults"), dict) else {}
+    allowed_periods = {"daily", "weekly", "monthly", "yearly"}
+    default_period = str(incoming_defaults.get("financePeriod", "weekly")).lower()
+    if default_period not in allowed_periods: default_period = "weekly"
+    default_sort = str(incoming_defaults.get("productSort", "featured"))
+    if default_sort not in {"featured", "newest", "price_asc", "price_desc"}: default_sort = "featured"
+    incoming_layout = settings.get("layout") if isinstance(settings.get("layout"), dict) else {}
+    allowed_layout = ["navigation", "category_title", "product_grid", "footer"]
+    requested_order = incoming_layout.get("order", allowed_layout)
+    if not isinstance(requested_order, list): requested_order = allowed_layout
+    layout_order = []
+    for item in requested_order:
+        item = str(item)
+        if item in allowed_layout and item not in layout_order: layout_order.append(item)
+    for item in allowed_layout:
+        if item not in layout_order: layout_order.append(item)
+    incoming_elements = settings.get("elements") if isinstance(settings.get("elements"), list) else []
+    elements = []
+    for item in incoming_elements[:100]:
+        if not isinstance(item, dict): continue
+        selector = clean_text(item.get("selector", ""), 250, "Element selector", False)
+        # Selectors are used only with querySelector; forbid markup, pseudo-URL tricks, and excessively complex selectors.
+        if not selector or re.search(r"[<>]|javascript:|url\s*\(", selector, re.I): continue
+        if not re.fullmatch(r"""[A-Za-z0-9_#.*\[\]\s=\-'"():>+~^$|,]+""", selector): continue
+        if selector.strip() in ("*", "body", "html", "#app", "#appRoot", "#productsView"): continue
+        requested_visibility = item.get("visibility") if item.get("visibility") in ("default","show","hide") else "default"
+        if requested_visibility == "hide" and re.search(r"\b(button|input|form|pay|payment|checkout|order|submit|cart|finance|workshop|admin)\b", selector, re.I): requested_visibility = "default"
+        def element_color(value):
+            value = str(value or "")
+            return value if re.fullmatch(r"#[0-9a-fA-F]{6}", value) else ""
+        try: font_size = max(0, min(48, int(float(item.get("fontSize", 0) or 0))))
+        except (TypeError, ValueError): font_size = 0
+        try: element_radius = max(0, min(40, int(float(item.get("radius", 0) or 0))))
+        except (TypeError, ValueError): element_radius = 0
+        try: element_padding = max(0, min(48, int(float(item.get("padding", 0) or 0))))
+        except (TypeError, ValueError): element_padding = 0
+        elements.append({"selector":selector,"name":clean_text(item.get("name", ""),80,"Element name",False),"text":clean_text(item.get("text", ""),500,"Element text",False),"textAm":clean_text(item.get("textAm", ""),500,"Element Amharic text",False),"visibility":requested_visibility,"background":element_color(item.get("background")),"color":element_color(item.get("color")),"fontSize":font_size,"radius":element_radius,"padding":element_padding})
+    clean = {"appearance":appearance,"labels":labels,"content":content,"visibility":visibility,"elements":elements,"layout":{"order":layout_order},"defaults":{"financePeriod":default_period,"productSort":default_sort}}
+    try:
+        existing = supabase_request("GET", "/rest/v1/ambar_interface_settings", params={"select":"settings,version_history", "id":"eq.1", "limit":"1"}) or []
+        old = existing[0] if existing else {}
+        history = old.get("version_history") or []
+        if not isinstance(history, list): history = []
+        if old.get("settings"):
+            history.insert(0, {"version":len(history)+1,"published_at":dt.datetime.now(dt.timezone.utc).isoformat(),"published_by":str(user_id),"settings":old.get("settings")})
+        history = history[:10]
+        payload = {"id":1,"settings":clean,"version_history":history,"updated_at":dt.datetime.now(dt.timezone.utc).isoformat(),"updated_by":str(user_id)}
+        rows = supabase_request("POST", "/rest/v1/ambar_interface_settings", payload=payload, extra_headers={"Prefer":"resolution=merge-duplicates,return=representation"}) or []
+        write_security_event("interface_settings_published", actor_id=user_id, status_code=200, details={"version_history_count":len(history)})
+        return jsonify(ok=True, settings=clean, history=history, saved=True)
+    except Exception:
+        log.exception("Could not publish interface settings")
+        return jsonify(error="Could not publish interface settings. Apply AMBAR_INTERFACE_DESIGNER_MIGRATION.sql and verify Render's Supabase settings."), 503
 
 @app.get("/api/admin/button-settings")
 def admin_button_settings_get():
@@ -2261,7 +2634,7 @@ def admin_button_settings_get():
 def admin_button_settings_save():
     user_id, error = admin_user_from_request()
     if error: return error
-    if user_id != ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if not is_main_admin_user(user_id):
         return jsonify(error="Only the main admin can edit admin menu buttons."), 403
     if not supabase_enabled(): return jsonify(error="Supabase is required for persistent button settings."), 503
     data = request.get_json(silent=True) or {}; rows = data.get("buttons")
@@ -2288,7 +2661,7 @@ def admin_roles_me():
     """Return only the signed-in user's own permissions after Telegram verification."""
     user_id, error = verified_telegram_admin()
     if error: return error
-    if user_id == ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if is_main_admin_user(user_id):
         return jsonify(owner=True, permissions=["*"])
     record = admin_permissions_for(user_id) or {}
     active = bool(record.get("active")) and record.get("role") != "disabled"
@@ -2300,7 +2673,7 @@ def admin_roles_me():
 def admin_roles_list():
     user_id, error = admin_user_from_request()
     if error: return error
-    if user_id != ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if not is_main_admin_user(user_id):
         return jsonify(error="Only the main admin can manage admin accounts."), 403
     if not supabase_enabled(): return jsonify(error="Supabase is required for persistent admin roles."), 503
     try:
@@ -2315,39 +2688,48 @@ def admin_roles_list():
 def admin_roles_save():
     user_id, error = admin_user_from_request()
     if error: return error
-    if user_id != ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if not is_main_admin_user(user_id):
         return jsonify(error="Only the main admin can manage admin accounts."), 403
     if not supabase_enabled(): return jsonify(error="Supabase is required for persistent admin roles."), 503
     data = request.get_json(silent=True) or {}
     target = str(data.get("telegram_user_id", "")).strip()
     name = clean_text(data.get("display_name", ""), 100, "Admin name", False)
     active = bool(data.get("active", True))
-    permissions = normalize_admin_permissions(data.get("permissions", []))
-    allowed = {"orders", "products", "delivery", "dashboard", "customers", "security", "service", "workshop_erp", "finance_inventory"}
+    make_super_admin = bool(data.get("main_admin2", False))
+    permissions = ["*"] if make_super_admin and active else normalize_admin_permissions(data.get("permissions", []))
+    allowed = {"orders", "order_dispatch", "products", "delivery", "dashboard", "customers", "security", "service", "workshop_erp", "finance_inventory", "admin_management"}
     if not target.isdigit(): return jsonify(error="Enter the admin's numeric Telegram ID."), 400
-    if target == ADMIN_PASSWORD_MANAGER_TELEGRAM_ID: return jsonify(error="The main admin account cannot be edited or removed here."), 400
-    if not isinstance(permissions, list) or any(x not in allowed for x in permissions):
+    if target == ADMIN_PASSWORD_MANAGER_TELEGRAM_ID: return jsonify(error="The original main admin account is protected."), 400
+    if target == str(user_id): return jsonify(error="You cannot edit or remove your own administrator account here."), 400
+    if not isinstance(permissions, list) or (not make_super_admin and any(x not in allowed for x in permissions)):
         return jsonify(error="Select one or more valid permissions."), 400
     if not permissions and active: return jsonify(error="Select at least one permission or disable the account."), 400
-    role = "disabled" if not active else ("orders" if permissions == ["orders"] else "staff")
+    role = "disabled" if not active else ("super_admin" if make_super_admin else ("orders" if permissions == ["orders"] else "staff"))
     payload={"telegram_user_id":target,"display_name":name,"role":role,"active":active,"permissions":permissions,"updated_at":dt.datetime.now(dt.timezone.utc).isoformat()}
     try:
+        if make_super_admin and active:
+            existing_super_admins = supabase_request("GET", "/rest/v1/ambar_admin_roles", params={"select":"telegram_user_id", "role":"eq.super_admin", "active":"eq.true", "limit":"20"}) or []
+            if any(str(x.get("telegram_user_id") or "") != target for x in existing_super_admins):
+                return jsonify(error="Main Admin 2 is already assigned. Edit that account to change the full-control administrator."), 409
         rows=supabase_request("POST","/rest/v1/ambar_admin_roles",payload=payload,extra_headers={"Prefer":"resolution=merge-duplicates,return=representation"}) or []
-        write_security_event("admin_role_changed",actor_id=user_id,status_code=200,details={"target_admin_id":target,"permissions":permissions,"active":active})
+        write_security_event("admin_role_changed",actor_id=user_id,status_code=200,details={"target_admin_id":target,"permissions":permissions,"active":active,"role":role})
         return jsonify(ok=True,admin=(rows[0] if rows else payload))
-    except Exception:
+    except Exception as exc:
         log.exception("Could not save admin role")
-        return jsonify(error="Could not save admin role. Apply the updated admin_roles_and_activity_migration.sql."), 503
+        # Surface a sanitized database hint so the owner can distinguish a missing column,
+        # schema-cache issue, or insufficient Supabase service-role grants.
+        safe_error = re.sub(r"[\r\n\t]+", " ", str(exc))[:360]
+        return jsonify(error="Could not save admin role. " + safe_error + " If the migration has not been run in the same Supabase project used by Render, apply admin_roles_and_activity_migration.sql."), 503
 
 
 @app.delete("/api/admin/roles/<target>")
 def admin_roles_delete(target):
     user_id, error = admin_user_from_request()
     if error: return error
-    if user_id != ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if not is_main_admin_user(user_id):
         return jsonify(error="Only the main admin can remove admin accounts."), 403
-    if not target.isdigit() or target == ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
-        return jsonify(error="Invalid target or protected main admin account."), 400
+    if not target.isdigit() or target == ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or target == str(user_id):
+        return jsonify(error="Invalid target, the original main admin, or your own account cannot be removed here."), 400
     try:
         supabase_request("DELETE", "/rest/v1/ambar_admin_roles", params={"telegram_user_id":f"eq.{target}"})
         write_security_event("admin_removed", actor_id=user_id, status_code=200, details={"target_admin_id":target})
@@ -2355,6 +2737,23 @@ def admin_roles_delete(target):
     except Exception:
         log.exception("Could not remove admin")
         return jsonify(error="Could not remove admin account."), 503
+
+
+@app.get("/api/admin/order-dispatch/orders")
+def admin_order_dispatch_orders():
+    """Return only the customer-order fields needed for Telegram dispatch; no finance summary."""
+    _, error = admin_user_from_request()
+    if error: return error
+    if not supabase_enabled(): return jsonify(error="Supabase is required for saved customer orders."), 503
+    try:
+        orders = supabase_request("GET", "/rest/v1/customer_orders", params={
+            "select":"reference,status,total_etb,customer_name,created_at,items",
+            "order":"created_at.desc", "limit":"500"
+        }) or []
+        return jsonify(orders=orders)
+    except Exception:
+        log.exception("Could not load customer orders for Telegram dispatch")
+        return jsonify(error="Could not load customer orders for dispatch. Check Supabase and Render logs."), 503
 
 
 @app.get("/api/admin/phase2/summary")
@@ -2365,25 +2764,161 @@ def phase2_admin_summary():
     try:
         orders = supabase_request("GET", "/rest/v1/customer_orders", params={"select":"reference,status,product_total_etb,delivery_fee_etb,total_etb,cancellation_fee_etb,cancellation_refund_etb,cancellation_fee_status,delivery_area,delivery_distance_km,delivery_fee_mode,telegram_user_id,customer_name,phone,delivery_location,notes,created_at,items", "order":"created_at.desc", "limit":"500"}) or []
         areas = supabase_request("GET", "/rest/v1/delivery_areas", params={"select":"id,area_name,fee_etb,estimated_days,active", "order":"area_name.asc"}) or []
+        # Show whether each customer order has already been manually sent to Workshop ERP.
+        try:
+            workshop_rows = supabase_request("GET", "/rest/v1/workshop_erp_state", params={"select":"state", "id":"eq.1", "limit":"1"}) or []
+            workshop_state = workshop_rows[0].get("state", {}) if workshop_rows and isinstance(workshop_rows[0].get("state"), dict) else {}
+            imported_refs = {str(x.get("sourceCustomerOrderReference") or "") for x in workshop_state.get("orders", []) if isinstance(x, dict) and x.get("sourceCustomerOrderReference")}
+        except Exception:
+            log.exception("Could not load Workshop ERP links for order-management display")
+            imported_refs = set()
+        for order in orders:
+            order["workshop_workflow_created"] = str(order.get("reference") or "") in imported_refs
         completed = [o for o in orders if o.get("status") == "Delivered"]
-        return jsonify(orders=orders, areas=areas, gps_settings=get_gps_delivery_settings() or {"id":1,"origin_lat":None,"origin_lon":None,"price_per_km":10,"base_fee_etb":50,"active":False}, metrics={"orders":len(orders),"pending":sum(o.get("status") not in ("Delivered","Cancelled") for o in orders),"completed":len(completed),"revenue_etb":sum(float(o.get("total_etb") or 0) for o in completed)})
+        return jsonify(orders=orders, areas=areas, gps_settings=get_gps_delivery_settings() or {"id":1,"origin_lat":None,"origin_lon":None,"price_per_km":0,"base_fee_etb":0,"active":False}, metrics={"orders":len(orders),"pending":sum(o.get("status") not in ("Delivered","Cancelled") for o in orders),"completed":len(completed),"revenue_etb":sum(float(o.get("total_etb") or 0) for o in completed)})
     except Exception:
         log.exception("Phase 2 admin summary failed")
         return jsonify(error="Could not load Phase 2 dashboard. Run phase2_orders_delivery_schema.sql first."), 503
 
 
+def _finance_record_date(value):
+    """Normalize common Workshop ERP date values to YYYY-MM-DD."""
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        return dt.datetime.fromisoformat(raw.replace("Z", "+00:00")).date().isoformat()
+    except Exception:
+        pass
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return dt.datetime.strptime(raw[:10], fmt).date().isoformat()
+        except Exception:
+            continue
+    return ""
+
+
+def sync_workshop_sales_into_finance(workshop_state, user_id):
+    """Idempotently mirror sold products and material receipts into the Finance ledger."""
+    if not supabase_enabled() or not isinstance(workshop_state, dict):
+        return {"synced": 0, "receivables": 0, "material_expenses": 0}
+    finance_start_date = "2026-10-26"
+    sales = workshop_state.get("sales", [])
+    products = workshop_state.get("products", [])
+    movements = workshop_state.get("materialTransactions", [])
+    if not isinstance(sales, list): sales = []
+    if not isinstance(products, list): products = []
+    if not isinstance(movements, list): movements = []
+    sales = _merge_legacy_sold_products(sales, products)
+    existing = supabase_request("GET", "/rest/v1/ambar_finance_entries", params={"select":"source_ref", "source_ref":"not.is.null", "limit":"5000"}) or []
+    refs = {str(x.get("source_ref")) for x in existing if x.get("source_ref")}
+    synced = receivables = material_expenses = 0
+
+    for sale in sales:
+        if not isinstance(sale, dict) or str(sale.get("status", "")).strip().upper() != "SOLD":
+            continue
+        sale_id = str(sale.get("saleId") or sale.get("sale_id") or sale.get("id") or sale.get("saleNumber") or sale.get("sale_number") or sale.get("receiptNumber") or sale.get("receipt_number") or sale.get("reference") or sale.get("serial") or sale.get("productId") or sale.get("product_id") or "").strip()
+        if not sale_id: continue
+        sold_at = str(sale.get("soldAtISO") or sale.get("soldAt") or sale.get("sold_at") or sale.get("date") or sale.get("createdAt") or sale.get("created_at") or "").strip()
+        sale_date = _finance_record_date(sold_at)
+        if not sale_date or sale_date < finance_start_date: continue
+        sale_key = sale_id + (":" + sold_at if sold_at else ":" + sale_date)
+        money_ref = "workshop-sale:" + sale_key
+        receivable_ref = "workshop-sale-receivable:" + sale_key
+        legacy_money_ref = "workshop-sale:" + sale_id
+        price = 0.0
+        for k in ("price", "salePrice", "sale_price", "total", "totalAmount", "total_amount"):
+            try: value = float(sale.get(k) or 0)
+            except (TypeError, ValueError): continue
+            if value > 0: price = round(value, 2); break
+        paid = 0.0
+        for k in ("paidAmount", "paid_amount", "amountPaid", "amount_paid"):
+            try: value = float(sale.get(k) or 0)
+            except (TypeError, ValueError): continue
+            if value > 0: paid = round(value, 2); break
+        if price <= 0: price = paid
+        if price <= 0: continue
+        label = str(sale.get("model") or sale.get("productId") or sale.get("product_id") or sale_id)
+        status = re.sub(r"\s+", " ", re.sub(r"[_-]+", " ", str(sale.get("paymentStatus", sale.get("payment_status", ""))).strip().lower()))
+        fully_paid = status in {"paid", "paid in full", "fully paid", "fully paid in full", "complete", "completed"}
+        if fully_paid:
+            if receivable_ref in refs:
+                supabase_request("DELETE", "/rest/v1/ambar_finance_entries", params={"source_ref":"eq." + receivable_ref})
+                refs.discard(receivable_ref)
+            if money_ref in refs or legacy_money_ref in refs: continue
+            payload = {"direction":"in", "category":"Workshop ERP Sale", "amount_etb":round(paid if paid > 0 else price, 2), "description":"Workshop ERP paid sale · " + label, "entry_date":sale_date, "created_by":str(user_id), "source_ref":money_ref}
+            supabase_request("POST", "/rest/v1/ambar_finance_entries", params={"on_conflict":"source_ref"}, payload=payload, extra_headers={"Prefer":"resolution=ignore-duplicates,return=minimal"})
+            refs.add(money_ref); synced += 1
+        else:
+            outstanding = round(max(0.0, price-paid), 2)
+            if outstanding <= 0: continue
+            status_label = str(sale.get("paymentStatus") or sale.get("payment_status") or "Payment waiting")
+            payload = {"direction":"in", "category":"Workshop ERP Sale Receivable", "amount_etb":outstanding, "description":"SOLD · payment due (not cash received) · " + label + " · " + status_label, "entry_date":sale_date, "created_by":str(user_id), "source_ref":receivable_ref}
+            supabase_request("POST", "/rest/v1/ambar_finance_entries", params={"on_conflict":"source_ref"}, payload=payload, extra_headers={"Prefer":"resolution=merge-duplicates,return=minimal"})
+            refs.add(receivable_ref); receivables += 1
+
+    # A received material movement is a purchase/expense; cutting or using stock is not
+    # a second expense. Use qty × recorded unit cost and a stable reference to prevent duplicates.
+    active_material_refs = set()
+    for movement in movements:
+        if not isinstance(movement, dict) or str(movement.get("type", "")).strip().lower() != "receipt":
+            continue
+        movement_id = str(movement.get("id") or movement.get("transactionId") or movement.get("transaction_id") or "").strip()
+        date_value = movement.get("date") or movement.get("createdAt") or movement.get("created_at") or ""
+        movement_date = _finance_record_date(date_value)
+        if not movement_id or not movement_date or movement_date < finance_start_date:
+            continue
+        try: qty = float(movement.get("qty") or movement.get("quantity") or 0)
+        except (TypeError, ValueError): qty = 0.0
+        try: unit_cost = float(movement.get("unitCost") or movement.get("unit_cost") or movement.get("cost") or 0)
+        except (TypeError, ValueError): unit_cost = 0.0
+        amount = round(qty * unit_cost, 2)
+        if qty <= 0 or unit_cost <= 0 or amount <= 0:
+            continue
+        ref = "workshop-material-receipt:" + movement_id + ":" + movement_date
+        active_material_refs.add(ref)
+        material_name = str(movement.get("materialName") or movement.get("material_name") or movement.get("name") or movement.get("materialId") or "Material")
+        notes = str(movement.get("notes") or "").strip()
+        description = f"Workshop ERP material purchase · {material_name} · {qty:g} {movement.get('unit') or ''}".strip()
+        if notes: description += " · " + notes
+        payload = {"direction":"out", "category":"Workshop ERP Material Purchase", "amount_etb":amount, "description":description, "entry_date":movement_date, "created_by":str(user_id), "source_ref":ref}
+        supabase_request("POST", "/rest/v1/ambar_finance_entries", params={"on_conflict":"source_ref"}, payload=payload, extra_headers={"Prefer":"resolution=merge-duplicates,return=minimal"})
+        refs.add(ref); material_expenses += 1
+
+    # If a receipt is edited/deleted or changed to usage in Workshop ERP, remove its linked
+    # auto-entry so the ledger continues to reflect the single source of truth.
+    for old_ref in list(refs):
+        old_date = old_ref.rsplit(":", 1)[-1] if old_ref.startswith("workshop-material-receipt:") else ""
+        if old_ref.startswith("workshop-material-receipt:") and old_date >= finance_start_date and old_ref not in active_material_refs:
+            supabase_request("DELETE", "/rest/v1/ambar_finance_entries", params={"source_ref":"eq." + old_ref})
+            refs.discard(old_ref)
+    return {"synced": synced, "receivables": receivables, "material_expenses": material_expenses}
+
+
 @app.route("/api/admin/finance-inventory", methods=["GET", "POST", "DELETE"])
 def admin_finance_inventory():
     """Finance workspace sourced only from the shared Workshop ERP state."""
-    user_id, error = admin_user_from_request()
+    # Finance is launched only inside Workshop ERP. Reuse the authenticated Workshop ERP session:
+    # owner uses the emergency admin session; staff use their unique Workshop ERP session.
+    user_id, error = workshop_session_user()
     if error:
         return error
+    owner_id = str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or "")
+    if not is_main_admin_user(user_id):
+        write_security_event("finance_inventory_owner_only_denied", actor_id=str(user_id), path=request.path, method=request.method, status_code=403)
+        return jsonify(error="This financial workspace is restricted to the Main Admin. Enter the Main Admin password in Workshop ERP."), 403
+    # The financial period starts on Monday 26 October 2026 with zero opening balance.
+    finance_start_date = "2026-10-26"
     if not supabase_enabled():
         return jsonify(error="Supabase is required. Configure SUPABASE_URL and SUPABASE_SECRET_KEY in Render."), 503
     try:
         if request.method == "GET":
             # Workshop ERP is the single source of truth for workshop sales and stock.
-            workshop_rows = supabase_request("GET", "/rest/v1/workshop_erp_state", params={"select":"state,updated_at", "id":"eq.1", "limit":"1"}) or []
+            try:
+                workshop_rows = supabase_request("GET", "/rest/v1/workshop_erp_state", params={"select":"state,updated_at", "id":"eq.1", "limit":"1"}) or []
+            except Exception as exc:
+                log.exception("Finance dashboard could not read Workshop ERP shared state")
+                return jsonify(error="Could not read Workshop ERP data. Run workshop_erp_state_migration.sql in the same Supabase project. Details: " + str(exc)[:220]), 503
             workshop_state = (workshop_rows[0] or {}).get("state") if workshop_rows else {}
             if not isinstance(workshop_state, dict):
                 workshop_state = {}
@@ -2393,44 +2928,29 @@ def admin_finance_inventory():
             if not isinstance(workshop_sales, list): workshop_sales = []
             if not isinstance(workshop_products, list): workshop_products = []
             if not isinstance(workshop_materials, list): workshop_materials = []
+            # Merge any unmatched legacy SOLD units even when newer Sales Archive entries already exist.
+            workshop_sales = _merge_legacy_sold_products(workshop_sales, workshop_products)
 
-            # Mirror only fully paid Workshop ERP sales into Money In. Pay Later,
-            # Payment Waiting, and Deposit Paid are excluded unless ERP later stores
-            # an explicit received amount. A source_ref makes refreshes idempotent.
-            existing = supabase_request("GET", "/rest/v1/ambar_finance_entries", params={"select":"source_ref", "source_ref":"not.is.null", "limit":"5000"}) or []
-            existing_refs = {str(x.get("source_ref")) for x in existing if x.get("source_ref")}
-            for sale in workshop_sales:
-                if not isinstance(sale, dict) or str(sale.get("status", "")).upper() != "SOLD":
-                    continue
-                payment_status = str(sale.get("paymentStatus", "")).strip().lower()
-                if payment_status not in {"paid", "paid in full", "fully paid", "fully paid in full", "fully_paid", "complete", "completed"}:
-                    continue
-                sale_id = str(sale.get("id") or sale.get("serial") or sale.get("productId") or "").strip()
-                if not sale_id:
-                    continue
-                sold_at = str(sale.get("soldAtISO") or sale.get("soldAt") or "")
-                # Include sale time so a restocked unit sold again can create a new entry.
-                source_ref = "workshop-sale:" + sale_id + (":" + sold_at if sold_at else "")
-                # Respect legacy sync keys from earlier dashboard builds to avoid
-                # importing the same historical sale a second time after upgrade.
-                legacy_source_ref = "workshop-sale:" + sale_id
-                if source_ref in existing_refs or legacy_source_ref in existing_refs:
-                    continue
-                amount = sale.get("paidAmount", sale.get("amountPaid", sale.get("price", sale.get("salePrice", 0))))
-                try: amount = round(float(amount or 0), 2)
-                except (TypeError, ValueError): continue
-                if amount <= 0: continue
-                try:
-                    entry_date = dt.datetime.fromisoformat(sold_at.replace("Z", "+00:00")).date().isoformat()
-                except Exception:
-                    entry_date = dt.date.today().isoformat()
-                description = "Workshop ERP paid sale · " + str(sale.get("model") or sale.get("productId") or sale_id)
-                payload = {"direction":"in", "category":"Workshop ERP Sale", "amount_etb":amount, "description":description[:500], "entry_date":entry_date, "created_by":str(user_id), "source_ref":source_ref}
-                supabase_request("POST", "/rest/v1/ambar_finance_entries", params={"on_conflict":"source_ref"}, payload=payload, extra_headers={"Prefer":"resolution=ignore-duplicates,return=minimal"})
-                existing_refs.add(source_ref)
+            # Sync sales and material receipts on every Finance load as well as each Workshop save.
+            # This repairs missed entries and uses stable source references to prevent duplicates.
+            try:
+                sync_workshop_sales_into_finance(workshop_state, user_id)
+            except Exception:
+                log.exception("Finance dashboard loaded, but automatic Workshop ERP finance sync failed")
 
-            entries = supabase_request("GET", "/rest/v1/ambar_finance_entries", params={"select":"id,direction,category,amount_etb,description,entry_date,created_by,created_at,source_ref", "order":"entry_date.desc,created_at.desc", "limit":"1000"}) or []
-            return jsonify(entries=entries, workshop={"sales":workshop_sales, "products":workshop_products, "materials":workshop_materials, "updated_at":(workshop_rows[0] or {}).get("updated_at") if workshop_rows else None})
+            entries = supabase_request("GET", "/rest/v1/ambar_finance_entries", params={"select":"id,direction,category,amount_etb,description,entry_date,created_by,created_at,source_ref", "entry_date":"gte." + finance_start_date, "order":"entry_date.desc,created_at.desc", "limit":"5000"}) or []
+            assignments = workshop_state.get("workshopAssignments", []) if isinstance(workshop_state.get("workshopAssignments", []), list) else []
+            recipients = [{"id": owner_id, "name": "Main Admin"}] if owner_id else []
+            seen_recipient_ids = {str(owner_id)} if owner_id else set()
+            for assignment in assignments:
+                if not isinstance(assignment, dict) or assignment.get("active") is False:
+                    continue
+                rid = str(assignment.get("telegram_user_id") or "").strip()
+                if not rid.isdigit() or rid in seen_recipient_ids:
+                    continue
+                recipients.append({"id": rid, "name": str(assignment.get("display_name") or assignment.get("name") or ("Telegram user " + rid))[:100]})
+                seen_recipient_ids.add(rid)
+            return jsonify(entries=entries, finance_start_date=finance_start_date, opening_balance_etb=0, workshop={"stateFound":bool(workshop_rows), "sales":workshop_sales, "products":workshop_products, "materials":workshop_materials, "materialTransactions":workshop_state.get("materialTransactions", []) if isinstance(workshop_state.get("materialTransactions", []), list) else [], "dailyStockSnapshots":workshop_state.get("dailyStockSnapshots", []) if isinstance(workshop_state.get("dailyStockSnapshots", []), list) else [], "restockHistory":workshop_state.get("restockHistory", []) if isinstance(workshop_state.get("restockHistory", []), list) else [], "recipients":recipients, "updated_at":(workshop_rows[0] or {}).get("updated_at") if workshop_rows else None})
         if request.method == "POST":
             data = request.get_json(silent=True) or {}
             direction = str(data.get("direction", "")).lower().strip()
@@ -2440,6 +2960,8 @@ def admin_finance_inventory():
             try:
                 amount = float(data.get("amount_etb"))
                 dt.date.fromisoformat(entry_date)
+                if entry_date < finance_start_date:
+                    return jsonify(error="The new financial period starts Monday 26 October 2026. Choose that date or a later date."), 400
                 if amount <= 0 or amount > 1_000_000_000_000: raise ValueError()
             except (TypeError, ValueError):
                 return jsonify(error="Enter a valid date and a positive amount in ETB."), 400
@@ -2453,12 +2975,269 @@ def admin_finance_inventory():
         entry_id = str(data.get("id", ""))
         if not entry_id.isdigit():
             return jsonify(error="A valid ledger entry ID is required."), 400
-        rows = supabase_request("DELETE", "/rest/v1/ambar_finance_entries", params={"id":f"eq.{entry_id}"}) or []
+        # ERP-generated entries are audit records. They must be corrected in Workshop ERP,
+        # not removed from the finance ledger through a crafted DELETE request.
+        linked = supabase_request("GET", "/rest/v1/ambar_finance_entries", params={"select":"id,source_ref", "id":f"eq.{entry_id}", "limit":"1"}) or []
+        if not linked:
+            return jsonify(error="Ledger entry was not found."), 404
+        if linked[0].get("source_ref"):
+            return jsonify(error="This entry is automatically linked to Workshop ERP. Correct the source sale in Workshop ERP instead of deleting the synced ledger entry."), 409
+        rows = supabase_request("DELETE", "/rest/v1/ambar_finance_entries", params={"id":f"eq.{entry_id}", "source_ref":"is.null"}) or []
         write_security_event("finance_entry_deleted", actor_id=user_id, path=request.path, method="DELETE", status_code=200, details={"entry_id":entry_id})
         return jsonify(ok=True, deleted=entry_id)
-    except Exception:
+    except Exception as exc:
         log.exception("Financial & Inventory dashboard request failed")
-        return jsonify(error="Finance dashboard could not load Workshop ERP data or the finance ledger. Apply the finance migration and check the latest Render logs."), 503
+        detail = str(exc)[:260] or "Unknown database error"
+        if "ambar_finance_entries" in detail or "source_ref" in detail or "schema cache" in detail.lower():
+            hint = "Run the included ambar_finance_entries_migration.sql in Supabase, then wait for the schema cache to refresh."
+        elif "workshop_erp_state" in detail:
+            hint = "Run workshop_erp_state_migration.sql in the same Supabase project used by Render."
+        else:
+            hint = "Check SUPABASE_URL / SUPABASE_SECRET_KEY in Render and the latest Render logs."
+        return jsonify(error="Finance dashboard database request failed. " + hint + " Details: " + detail), 503
+
+
+def _finance_period_range(period, selected_date, finance_start="2026-10-26"):
+    """Resolve a daily/weekly/monthly/yearly reporting window, respecting zero-start."""
+    period = str(period or "daily").strip().lower()
+    if period not in {"daily", "weekly", "monthly", "yearly"}:
+        raise ValueError("Choose daily, weekly, monthly, or yearly report period.")
+    try:
+        selected = dt.date.fromisoformat(str(selected_date or "")[:10])
+    except (TypeError, ValueError):
+        selected = max(dt.date.today(), dt.date.fromisoformat(finance_start))
+    if selected.isoformat() < finance_start:
+        raise ValueError("The reporting period starts on Monday 26 October 2026. Select that date or later.")
+    if period == "daily":
+        start = end = selected
+    elif period == "weekly":
+        start = selected - dt.timedelta(days=selected.weekday())
+        end = start + dt.timedelta(days=6)
+    elif period == "monthly":
+        start = selected.replace(day=1)
+        end = (selected.replace(day=28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1)
+    else:
+        start = selected.replace(month=1, day=1)
+        end = selected.replace(month=12, day=31)
+    minimum = dt.date.fromisoformat(finance_start)
+    if start < minimum:
+        start = minimum
+    return period, start.isoformat(), end.isoformat(), selected.isoformat()
+
+
+def _finance_date_key(record):
+    raw = str((record or {}).get("soldAtISO") or (record or {}).get("soldAt") or (record or {}).get("sold_at") or (record or {}).get("date") or (record or {}).get("createdAt") or (record or {}).get("created_at") or "")
+    match = re.match(r"^(\d{4}-\d{2}-\d{2})", raw)
+    return match.group(1) if match else ""
+
+
+def _merge_legacy_sold_products(sales, products):
+    """Keep Sales Archive entries authoritative while including unmatched legacy SOLD units."""
+    merged = [x for x in sales if isinstance(x, dict)] if isinstance(sales, list) else []
+    for product in products if isinstance(products, list) else []:
+        if not isinstance(product, dict) or str(product.get("status") or "").upper() != "SOLD":
+            continue
+        product_record_id = str(product.get("id") or "")
+        product_id = str(product.get("productId") or product.get("serial") or "")
+        product_time = str(product.get("soldAtISO") or product.get("soldAt") or product.get("sold_at") or "")
+        matched = False
+        for sale in merged:
+            sale_record_id = str(sale.get("productRecordId") or sale.get("id") or "")
+            sale_product_id = str(sale.get("productId") or sale.get("serial") or "")
+            sale_time = str(sale.get("soldAtISO") or sale.get("soldAt") or sale.get("sold_at") or "")
+            same_unit = bool(product_record_id and sale_record_id == product_record_id) or bool(product_id and sale_product_id == product_id)
+            same_sale_time = not product_time or not sale_time or product_time == sale_time
+            if same_unit and same_sale_time:
+                matched = True
+                break
+        if not matched:
+            merged.append(product)
+    return merged
+
+
+@app.post("/api/admin/finance-inventory/pdf")
+def admin_finance_inventory_pdf():
+    """Generate a period-specific PDF or send it to a selected Telegram admin."""
+    user_id, error = workshop_session_user()
+    if error:
+        return error
+    owner_id = str(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or "")
+    if not is_main_admin_user(user_id):
+        return jsonify(error="PDF reports and Telegram delivery are restricted to the Main Admin."), 403
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from io import BytesIO
+        if not supabase_enabled():
+            return jsonify(error="Supabase is not configured. Check SUPABASE_URL and SUPABASE_SECRET_KEY in Render."), 503
+        request_data = request.get_json(silent=True) or {}
+        action = str(request_data.get("action") or "download").lower()
+        if action not in {"download", "send"}:
+            return jsonify(error="Report action must be download or send."), 400
+        try:
+            period, start_date, end_date, selected_date = _finance_period_range(request_data.get("reportPeriod"), request_data.get("selectedDate"))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        state_rows = supabase_request("GET", "/rest/v1/workshop_erp_state", params={"select":"state,updated_at", "id":"eq.1", "limit":"1"}) or []
+        state = (state_rows[0] or {}).get("state") if state_rows else {}
+        if not isinstance(state, dict): state = {}
+        products = state.get("products", []) if isinstance(state.get("products", []), list) else []
+        materials = state.get("materials", []) if isinstance(state.get("materials", []), list) else []
+        sales = state.get("sales", []) if isinstance(state.get("sales", []), list) else []
+        # Sales Archive is authoritative, while unmatched legacy SOLD units remain visible in reports.
+        sales = _merge_legacy_sold_products(sales, products)
+        ledger_all = supabase_request("GET", "/rest/v1/ambar_finance_entries", params={"select":"id,direction,category,amount_etb,description,entry_date,source_ref,created_at", "entry_date":"gte.2026-10-26", "order":"entry_date.desc,created_at.desc", "limit":"5000"}) or []
+        ledger = [x for x in ledger_all if start_date <= str(x.get("entry_date") or "") <= end_date]
+        paid_statuses = {"paid", "paid in full", "fully paid", "fully paid in full", "complete", "completed"}
+        period_sales = []
+        for sale in sales:
+            if not isinstance(sale, dict) or str(sale.get("status", "")).upper() != "SOLD":
+                continue
+            sale_date = _finance_date_key(sale)
+            if not sale_date or not (start_date <= sale_date <= end_date):
+                continue
+            period_sales.append(sale)
+        paid_sales = [x for x in period_sales if re.sub(r"\s+", " ", re.sub(r"[_-]+", " ", str(x.get("paymentStatus", x.get("payment_status", ""))).strip().lower())) in paid_statuses]
+        def amount_for(x):
+            for key in ("paidAmount", "paid_amount", "amountPaid", "amount_paid", "price", "salePrice", "sale_price"):
+                try:
+                    amount = float(x.get(key) or 0)
+                except (TypeError, ValueError):
+                    continue
+                if amount > 0:
+                    return amount
+            return 0.0
+        revenue = sum(amount_for(x) for x in paid_sales)
+        available_products = [p for p in products if isinstance(p, dict) and str(p.get("status") or "").strip().upper() not in {"SOLD", "DELETED", "REMOVED", "ARCHIVED"}]
+        def report_product_id(sale):
+            direct = sale.get("productId") or sale.get("product_id") or sale.get("serial")
+            if direct: return str(direct)
+            sid = sale.get("id")
+            by_id = [p for p in products if isinstance(p, dict) and sid is not None and str(p.get("id")) == str(sid)]
+            if len(by_id) == 1: return str(by_id[0].get("productId") or by_id[0].get("product_id") or ("PR-" + str(by_id[0].get("id")).zfill(5)))
+            model = str(sale.get("model") or "").strip()
+            by_model = [p for p in products if isinstance(p, dict) and model and str(p.get("model") or "").strip() == model]
+            if len(by_model) == 1: return str(by_model[0].get("productId") or by_model[0].get("product_id") or ("PR-" + str(by_model[0].get("id")).zfill(5)))
+            return "—"
+        manual_in = sum(float(x.get("amount_etb") or 0) for x in ledger if x.get("direction") == "in" and not x.get("source_ref"))
+        money_out = sum(float(x.get("amount_etb") or 0) for x in ledger if x.get("direction") == "out")
+        balance = revenue + manual_in - money_out
+        # Authorized Telegram recipients are the Main Admin and active Workshop ERP assignments.
+        assignments = state.get("workshopAssignments", []) if isinstance(state.get("workshopAssignments", []), list) else []
+        recipient_ids = {owner_id}
+        recipient_labels = {owner_id: "Main Admin 1"}
+        try:
+            super_admin_rows = supabase_request("GET", "/rest/v1/ambar_admin_roles", params={"select":"telegram_user_id,display_name,role,active,permissions", "active":"eq.true", "limit":"500"}) or []
+            for admin_row in super_admin_rows:
+                if admin_row.get("role") == "super_admin" and str(admin_row.get("telegram_user_id") or "").isdigit():
+                    sid = str(admin_row["telegram_user_id"])
+                    recipient_ids.add(sid)
+                    recipient_labels[sid] = (str(admin_row.get("display_name") or "Main Admin 2")[:80])
+        except Exception:
+            log.exception("Could not load additional main-admin report recipients")
+        for assignment in assignments:
+            if not isinstance(assignment, dict) or assignment.get("active") is False:
+                continue
+            rid = str(assignment.get("telegram_user_id") or "").strip()
+            if rid.isdigit():
+                recipient_ids.add(rid)
+                recipient_labels[rid] = str(assignment.get("display_name") or assignment.get("name") or ("Telegram user " + rid))[:100]
+        target_chat_id = str(request_data.get("recipientTelegramId") or "").strip()
+        if action == "send":
+            if not target_chat_id or target_chat_id not in recipient_ids:
+                return jsonify(error="Choose a Telegram recipient listed in the dashboard. Only the Main Admin and assigned Workshop ERP users can receive these reports."), 400
+            if not BOT_TOKEN:
+                return jsonify(error="Telegram sending is not configured. Add BOT_TOKEN to Render environment variables."), 503
+        def safe(v, limit=180):
+            return str(v if v is not None else "—").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")[:limit]
+        period_names = {"daily":"Daily", "weekly":"Weekly", "monthly":"Monthly", "yearly":"Yearly"}
+        period_label = period_names[period]
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4), rightMargin=10*mm, leftMargin=10*mm, topMargin=10*mm, bottomMargin=12*mm, title=f"AMBAR {period_label} Financial and Inventory Report")
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(name="AmbarTitle", parent=styles["Title"], textColor=colors.HexColor("#805b26"), fontSize=17, spaceAfter=7))
+        styles.add(ParagraphStyle(name="SmallCell", parent=styles["BodyText"], fontSize=7, leading=9))
+        sender_role = admin_permissions_for(user_id) or {}
+        prepared_by_label = "Main Admin 1" if str(user_id) == owner_id else (str(sender_role.get("display_name") or "Main Admin 2")[:80])
+        story = [Paragraph("AMBAR FURNITURE — FINANCIAL &amp; INVENTORY REPORT", styles["AmbarTitle"]),
+                 Paragraph(f"{period_label} report · {start_date} to {end_date} · Opening balance: ETB 0.00 from Monday, 26 October 2026", styles["Normal"]),
+                 Paragraph("Source: Workshop ERP shared state and its finance ledger · Prepared by: " + safe(prepared_by_label, 80) + " · Generated: " + dt.datetime.now().strftime("%Y-%m-%d %H:%M"), styles["Normal"]), Spacer(1, 8)]
+        def add_table(rows, widths, font=7):
+            table = Table(rows, colWidths=widths, repeatRows=1, hAlign="LEFT")
+            table.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#183b35")),("TEXTCOLOR",(0,0),(-1,0),colors.white),("GRID",(0,0),(-1,-1),0.35,colors.HexColor("#d6d0c4")),("BACKGROUND",(0,1),(-1,-1),colors.HexColor("#faf7f0")),("TEXTCOLOR",(0,1),(-1,-1),colors.HexColor("#222222")),("FONTSIZE",(0,0),(-1,-1),font),("VALIGN",(0,0),(-1,-1),"TOP"),("PADDING",(0,0),(-1,-1),4)]))
+            story.append(table)
+        summary = [["Metric", "Amount / Count"], ["Opening balance", "ETB 0.00"], ["Fully paid Workshop ERP sales", f"ETB {revenue:,.2f}"], ["Manual Money In", f"ETB {manual_in:,.2f}"], ["Money Out", f"ETB {money_out:,.2f}"], ["Indicative net movement", f"ETB {balance:,.2f}"], ["All sales in period", str(len(period_sales))], ["Fully paid sales", str(len(paid_sales))], ["Available finished units", str(len(available_products))], ["Raw materials", str(len(materials))]]
+        add_table(summary, [75*mm, 65*mm], 8)
+        story += [Spacer(1, 10), Paragraph("Workshop ERP sales", styles["Heading2"])]
+        rows_sales = [["Date", "Product ID", "Model", "Customer", "Salesperson", "Payment", "Sale ETB"]]
+        for x in sorted(period_sales, key=_finance_date_key, reverse=True):
+            rows_sales.append([_finance_date_key(x) or "—", safe(report_product_id(x), 28), safe(x.get("model") or x.get("name") or "—", 45), safe(x.get("customer"), 32), safe(x.get("rep") or x.get("salesperson"), 22), safe(x.get("paymentStatus") or x.get("payment_status"), 22), f"{amount_for(x):,.2f}"])
+        if len(rows_sales) == 1: rows_sales.append(["—", "—", "No sales recorded in this period", "—", "—", "—", "0.00"])
+        add_table(rows_sales, [20*mm, 28*mm, 40*mm, 32*mm, 25*mm, 28*mm, 25*mm], 6)
+        story += [Spacer(1, 10), Paragraph("Finished-unit inventory (live Workshop ERP stock)", styles["Heading2"])]
+        rows_inv = [["Product ID", "Model / Product", "Category", "Stock Type", "Status", "Price ETB"]]
+        for p in available_products:
+            rows_inv.append([safe(p.get("productId") or p.get("product_id") or ("PR-" + str(p.get("id")).zfill(5) if p.get("id") is not None else "—"), 28), safe(p.get("model") or p.get("name") or p.get("title"), 50), safe(p.get("category"), 25), safe(p.get("stockType") or p.get("stock_type"), 15), safe(p.get("status"), 20), f"{float(p.get('price', p.get('salePrice', p.get('sale_price', 0))) or 0):,.2f}"])
+        if len(rows_inv) == 1: rows_inv.append(["—", "No available finished units", "—", "—", "—", "0.00"])
+        add_table(rows_inv, [55*mm, 32*mm, 36*mm, 25*mm, 30*mm, 25*mm], 7)
+        story += [Spacer(1, 10), Paragraph("Raw-material inventory", styles["Heading2"])]
+        rows_mat = [["Material ID", "Material", "On hand", "Unit", "Reorder threshold", "Unit cost ETB", "Stock value ETB", "Stock status"]]
+        def stock_value(m):
+            for key in ("on_hand", "onHand", "stock", "quantity", "qty", "stock_quantity", "stockQuantity", "available_stock"):
+                if m.get(key) is not None and str(m.get(key)).strip() != "":
+                    try: return max(0, float(m[key]))
+                    except (ValueError, TypeError): pass
+            return 0.0
+        for m in materials:
+            if not isinstance(m, dict): continue
+            stock = stock_value(m); cost = float(m.get("cost", m.get("unitCost", m.get("unit_cost", 0))) or 0)
+            threshold = float(m.get("threshold", m.get("reorderLevel", m.get("reorder_level", m.get("minimumStock", m.get("minimum_stock", 0))))) or 0)
+            material_id = m.get("id", m.get("materialId", m.get("material_id", "—")))
+            rows_mat.append([safe(material_id, 20), safe(m.get("name") or m.get("materialName") or m.get("material_name"), 40), f"{stock:g}", safe(m.get("unit"), 12), f"{threshold:g}", f"{cost:,.2f}", f"{stock*cost:,.2f}", "LOW STOCK" if threshold > 0 and stock <= threshold else "OK"])
+        if len(rows_mat) == 1: rows_mat.append(["—", "No raw materials", "0", "—", "0", "0.00", "0.00", "—"])
+        add_table(rows_mat, [20*mm, 42*mm, 18*mm, 16*mm, 25*mm, 25*mm, 28*mm, 22*mm], 6)
+        story += [Spacer(1, 10), Paragraph("Raw-material movements in selected period", styles["Heading2"])]
+        movements = state.get("materialTransactions", []) if isinstance(state.get("materialTransactions", []), list) else []
+        movements = [m for m in movements if isinstance(m, dict) and start_date <= str(m.get("date") or _finance_date_key(m) or "") <= end_date]
+        rows_moves = [["Date", "Material", "Movement", "Quantity", "Unit", "Notes"]]
+        for m in sorted(movements, key=lambda x: str(x.get("date") or _finance_date_key(x)), reverse=True):
+            rows_moves.append([safe(m.get("date") or _finance_date_key(m), 12), safe(m.get("materialName") or m.get("name"), 42), "Stock added" if m.get("type") == "receipt" else "Usage / cut", str(m.get("qty") or 0), safe(m.get("unit"), 12), safe(m.get("notes"), 75)])
+        if len(rows_moves) == 1: rows_moves.append(["—", "No material movements", "—", "0", "—", "—"])
+        add_table(rows_moves, [25*mm, 45*mm, 35*mm, 22*mm, 20*mm, 70*mm], 7)
+        story += [Spacer(1, 10), Paragraph("Money ledger in selected period", styles["Heading2"])]
+        rows_ledger = [["Date", "Direction", "Category", "Description", "Amount ETB"]]
+        for x in ledger: rows_ledger.append([safe(x.get("entry_date"), 12), safe(x.get("direction"), 12).upper(), safe(x.get("category"), 30), safe(x.get("description"), 85), f"{float(x.get('amount_etb') or 0):,.2f}"])
+        if len(rows_ledger) == 1: rows_ledger.append(["—", "—", "No ledger entries", "Opening balance is zero", "0.00"])
+        add_table(rows_ledger, [25*mm, 25*mm, 38*mm, 135*mm, 28*mm], 7)
+        doc.build(story)
+        pdf_bytes = buf.getvalue()
+        if not pdf_bytes.startswith(b"%PDF-") or len(pdf_bytes) < 500:
+            return jsonify(error="The finance report generator did not produce a valid PDF. Please retry."), 500
+        filename = f"AMBAR_Financial_Inventory_{period}_{start_date}_to_{end_date}.pdf"
+        if action == "send":
+            if len(pdf_bytes) > 7 * 1024 * 1024:
+                return jsonify(error="This PDF is too large for Telegram. Narrow the report period and retry."), 413
+            upload = BytesIO(pdf_bytes); upload.name = filename
+            caption = f"AMBAR {period_label} Financial & Inventory Report\nPeriod: {start_date} to {end_date}\nOpening balance: ETB 0.00 from Monday, 26 October 2026\nPrepared by: {prepared_by_label}"
+            try:
+                result = bot_api("sendDocument", {"chat_id": target_chat_id, "caption": caption[:1024]}, {"document": (filename, upload, "application/pdf")}, timeout=60)
+            except Exception as exc:
+                log.exception("Could not send finance PDF to selected Telegram user %s", target_chat_id)
+                reason = str(exc)[:240]
+                if any(term in reason.lower() for term in ("chat not found", "bot was blocked", "can't initiate conversation", "user is deactivated")):
+                    reason += " The selected user must open/start the AMBAR Telegram bot before receiving files."
+                return jsonify(error="Telegram could not send the PDF. " + reason), 502
+            write_security_event("finance_inventory_pdf_sent", actor_id=str(user_id), path=request.path, method="POST", status_code=200, details={"period":period,"start_date":start_date,"end_date":end_date,"recipient_chat_id":target_chat_id,"message_id":(result or {}).get("message_id")})
+            return jsonify(ok=True, message=f"{period_label} PDF sent to {recipient_labels.get(target_chat_id, target_chat_id)}.", messageId=(result or {}).get("message_id"))
+        write_security_event("finance_inventory_pdf_downloaded", actor_id=str(user_id), path=request.path, method="POST", status_code=200, details={"period":period,"start_date":start_date,"end_date":end_date})
+        return send_file(BytesIO(pdf_bytes), mimetype="application/pdf", as_attachment=True, download_name=filename)
+    except Exception as exc:
+        log.exception("Could not generate finance dashboard PDF")
+        detail = str(exc)[:220] or "Unknown error"
+        return jsonify(error="Could not generate the finance PDF. Check Render logs. Details: " + detail), 500
 
 
 @app.post("/api/admin/phase2/delivery-areas")
@@ -2504,6 +3283,364 @@ def phase2_delete_order(reference):
         return jsonify(error="Could not delete this order. Check Supabase configuration and try again."), 503
 
 
+def sync_confirmed_customer_order_to_workshop(order):
+    """Idempotently import one saved Mini App customer order into Workshop ERP when an admin explicitly requests it."""
+    if not isinstance(order, dict):
+        raise RuntimeError("The customer order could not be read.")
+    reference = str(order.get("reference") or "").strip()
+    if not reference:
+        raise RuntimeError("The customer order has no reference number.")
+    items = order.get("items")
+    if not isinstance(items, list) or not items:
+        raise RuntimeError("This customer order has no saved product line items to send to production.")
+    if not supabase_enabled():
+        raise RuntimeError("Supabase is not configured.")
+
+    # Use the same catalogue metadata that the Mini App uses, but do not require
+    # a catalogue lookup to succeed: the saved order line remains the source of truth.
+    try:
+        load_product_catalog()
+    except Exception:
+        log.exception("Could not refresh product catalogue while importing order %s", reference)
+
+    for attempt in range(5):
+        rows = supabase_request("GET", "/rest/v1/workshop_erp_state", params={
+            "select": "id,state,updated_at", "id": "eq.1", "limit": "1"
+        }) or []
+        if not rows or not isinstance(rows[0].get("state"), dict):
+            raise RuntimeError("Workshop ERP shared state is not initialized. Open Workshop ERP as Main Admin, refresh it, then click Create Workshop Workflow Order again.")
+        current = rows[0]
+        state = current["state"]
+        work_orders = state.get("orders", [])
+        if not isinstance(work_orders, list): work_orders = []
+        existing_source_items = {
+            (str(x.get("sourceCustomerOrderReference") or ""), str(x.get("sourceCustomerOrderItemIndex") or ""))
+            for x in work_orders if isinstance(x, dict)
+        }
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        created = 0
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                continue
+            source_key = (reference, str(index))
+            if source_key in existing_source_items:
+                continue
+            catalog_id = str(item.get("id") or item.get("product_id") or item.get("productId") or "").strip()
+            catalog_product = PRODUCTS.get(catalog_id, {}) if isinstance(PRODUCTS, dict) else {}
+            model = str(item.get("name") or item.get("product_name") or item.get("title") or catalog_product.get("name") or catalog_id or "Customer order product").strip()
+            category = str(item.get("category") or catalog_product.get("category") or "Other").strip() or "Other"
+            try:
+                quantity = int(item.get("quantity", 1))
+            except (TypeError, ValueError):
+                quantity = 1
+            quantity = max(1, min(99, quantity))
+            serial = f"WEB-{reference}-{index:02d}"
+            # If a manually-created record happens to use the same serial, keep
+            # the import deterministic while avoiding overwriting that record.
+            used_ids = {str(x.get("serial") or x.get("productId") or "") for x in work_orders if isinstance(x, dict)}
+            if serial in used_ids:
+                serial = f"WEB-{reference}-{index:02d}-MINIAPP"
+                if serial in used_ids:
+                    raise RuntimeError(f"A different workshop record already uses the generated ID for order {reference}, item {index}.")
+            measurement = str(item.get("measurement") or "Not specified").strip()
+            line_notes = str(order.get("notes") or "").strip()
+            description_parts = [f"Mini App customer order {reference}", f"Customer: {order.get('customer_name') or 'Not provided'}"]
+            if order.get("phone"): description_parts.append(f"Phone: {order.get('phone')}")
+            description_parts.append(f"Measurement: {measurement}")
+            if line_notes: description_parts.append(f"Customer notes: {line_notes}")
+            if catalog_id: description_parts.append(f"Catalogue product ID: {catalog_id}")
+            work_orders.append({
+                "productId": serial,
+                "serial": serial,
+                "model": model,
+                "category": category,
+                "description": " · ".join(description_parts)[:1500],
+                "priority": "MEDIUM",
+                "rep": "",
+                "location": str(order.get("delivery_location") or "Workshop · confirm delivery requirements")[:300],
+                "qty": quantity,
+                "stockType": "O",
+                "orderType": "ORDER",
+                "stage": "Cutting & Prep",
+                "startedAt": now,
+                "finishedAt": "",
+                "stageHistory": [{"stage": "Cutting & Prep", "at": now, "action": "manually imported from Mini App customer order"}],
+                "sourceCustomerOrderReference": reference,
+                "sourceCustomerOrderItemIndex": index,
+                "catalogProductId": catalog_id,
+                "customerName": str(order.get("customer_name") or "")[:120],
+                "customerPhone": str(order.get("phone") or "")[:30],
+                "customerTelegramUserId": str(order.get("telegram_user_id") or ""),
+                "customerDeliveryLocation": str(order.get("delivery_location") or "")[:300],
+                "customerPaymentStatus": str(order.get("payment_status") or "Pending review")[:100],
+                "customerOrderTotalEtb": order.get("total_etb", 0),
+                "importedFromMiniApp": True,
+            })
+            existing_source_items.add(source_key)
+            created += 1
+        if created == 0:
+            return {"ok": True, "created": 0, "total_items": len(items), "already_imported": True}
+
+        state["orders"] = work_orders
+        activity = state.get("activityLog", [])
+        if not isinstance(activity, list): activity = []
+        activity.append(f"Admin manually sent Mini App customer order {reference} to Workshop ERP; created {created} production workflow item(s)")
+        state["activityLog"] = activity[-1000:]
+        patched = supabase_request("PATCH", "/rest/v1/workshop_erp_state", params={
+            "id": "eq.1", "updated_at": f"eq.{current.get('updated_at')}"
+        }, payload={"state": state, "updated_at": now, "updated_by": "main-admin-order-sync"},
+            extra_headers={"Prefer": "return=representation"}) or []
+        if patched:
+            return {"ok": True, "created": created, "total_items": len(items), "already_imported": False}
+    raise RuntimeError("Workshop data changed while importing this order. Click Create Workshop Workflow Order again to retry safely.")
+
+
+@app.post("/api/admin/order-dispatch/new-design")
+def admin_send_new_design_to_telegram():
+    """Send an admin-created readymade order idea directly to a chosen Telegram chat; no order/ERP/finance record is created."""
+    _, error = admin_user_from_request()
+    if error: return error
+    if not BOT_TOKEN:
+        return jsonify(error="Telegram sending is not configured: BOT_TOKEN is missing on the server."), 503
+    data = request.get_json(silent=True) or {}
+    target_chat = str(data.get("chat_id") or "").strip()
+    name = str(data.get("name") or "").strip()[:150]
+    photo_url = str(data.get("photo_url") or "").strip()[:1500]
+    photo_base64 = str(data.get("photo_base64") or "").strip()
+    photo_mime = str(data.get("photo_mime") or "image/jpeg").strip().lower()
+    photo_name = secure_filename(str(data.get("photo_name") or "ambar-design.jpg"))[:120] or "ambar-design.jpg"
+    product_id = str(data.get("product_id") or "").strip()[:100]
+    model = str(data.get("model") or "").strip()[:120]
+    salesperson = str(data.get("salesperson") or "").strip()[:120]
+    measurement_type = str(data.get("measurement_type") or "").strip()[:40]
+    measurements = str(data.get("measurements") or "").strip()[:300]
+    handle_type = str(data.get("handle_type") or "").strip()[:120]
+    color = str(data.get("color") or "").strip()[:120]
+    description = str(data.get("description") or "").strip()[:1800]
+    additional_text = str(data.get("additional_text") or "").strip()[:1200]
+    if not target_chat:
+        return jsonify(error="Enter a Telegram group/channel username or chat ID."), 400
+    if not re.fullmatch(r"@[A-Za-z0-9_]{5,}|-?\d{5,20}", target_chat):
+        return jsonify(error="Telegram destination must be a public @username or numeric chat ID."), 400
+    if photo_url and not re.match(r"^https?://", photo_url, re.I):
+        return jsonify(error="Photo URL must start with http:// or https://."), 400
+    uploaded_photo = None
+    if photo_base64:
+        if photo_mime not in {"image/jpeg", "image/png", "image/webp"}:
+            return jsonify(error="Upload a JPG, PNG, or WebP photo."), 400
+        try:
+            raw_photo = base64.b64decode(photo_base64, validate=True)
+        except Exception:
+            return jsonify(error="Uploaded photo data is invalid."), 400
+        if not raw_photo or len(raw_photo) > 5 * 1024 * 1024:
+            return jsonify(error="Photo must be 5 MB or smaller."), 400
+        uploaded_photo = (photo_name, BytesIO(raw_photo), photo_mime)
+    # Modern production ticket. Every optional field is omitted completely when blank.
+    lines = ["<b>AMBAR FURNITURE</b>", "<b>READYMADE ORDER</b>"]
+    if name: lines.extend(["", f"<b>Product:</b> {html.escape(name)}"])
+    work_lines = []
+    if product_id: work_lines.append(f"<b>Product ID:</b> {html.escape(product_id)}")
+    if model: work_lines.append(f"<b>Model:</b> {html.escape(model)}")
+    if handle_type: work_lines.append(f"<b>Handle type:</b> {html.escape(handle_type)}")
+    if color: work_lines.append(f"<b>Color:</b> {html.escape(color)}")
+    if measurement_type: work_lines.append(f"<b>Measurement type:</b> {html.escape(measurement_type)}")
+    if measurements: work_lines.append(f"<b>Measurements:</b> {html.escape(measurements)}")
+    if salesperson: work_lines.append(f"<b>Salesman:</b> {html.escape(salesperson)}")
+    if description: work_lines.append(f"<b>Work instructions:</b> {html.escape(description)}")
+    if additional_text: work_lines.append(f"<b>Additional text:</b> {html.escape(additional_text)}")
+    if work_lines: lines.extend(["", "━━━━━━━━━━━━━━━━━━", "<b>WORK DETAILS</b>", "", *work_lines])
+    message = "\n".join(lines)
+    try:
+        if uploaded_photo:
+            telegram_result = bot_api("sendPhoto", {"chat_id": target_chat, "caption": message[:1000], "parse_mode": "HTML"}, files={"photo": uploaded_photo})
+            if len(message) > 1000:
+                bot_api("sendMessage", {"chat_id": target_chat, "text": message[1000:], "parse_mode": "HTML", "disable_web_page_preview": True})
+        elif photo_url:
+            telegram_result = bot_api("sendPhoto", {"chat_id": target_chat, "photo": photo_url, "caption": message[:1000], "parse_mode": "HTML"})
+            if len(message) > 1000:
+                bot_api("sendMessage", {"chat_id": target_chat, "text": message[1000:], "parse_mode": "HTML", "disable_web_page_preview": True})
+        else:
+            telegram_result = bot_api("sendMessage", {"chat_id": target_chat, "text": message, "parse_mode": "HTML", "disable_web_page_preview": True})
+        return jsonify(ok=True, sent=True, message="New readymade order sent to the selected Telegram destination.", telegram_message_id=(telegram_result or {}).get("message_id")), 200
+    except Exception as exc:
+        log.exception("Could not send AMBAR readymade order to Telegram destination %s", target_chat)
+        return jsonify(error=(str(exc) or "Telegram message failed.")[:300]), 502
+
+
+@app.post("/api/admin/phase2/orders/<reference>/send-to-workers")
+def phase2_send_order_to_workers(reference):
+    """Send one saved customer order to the configured private workers group, without changing ERP/finance data."""
+    _, error = admin_user_from_request()
+    if error: return error
+    if not supabase_enabled(): return jsonify(error="Supabase is not configured."), 503
+    if not BOT_TOKEN: return jsonify(error="Telegram sending is not configured: BOT_TOKEN is missing on the server."), 503
+    try:
+        dispatch_options = request.get_json(silent=True) or {}
+        target_chat = str(dispatch_options.get("chat_id") or WORKERS_TELEGRAM_CHAT_ID).strip()
+        if not target_chat:
+            return jsonify(error="Enter a Telegram group/channel username or chat ID in Order Dispatch, or configure WORKERS_TELEGRAM_CHAT_ID in Render."), 400
+        if not re.fullmatch(r"@[A-Za-z0-9_]{5,}|-?\d{5,20}", target_chat):
+            return jsonify(error="Telegram destination must be a public @username or numeric chat ID (private groups usually begin with -100)."), 400
+        product_id = str(dispatch_options.get("product_id") or "").strip()[:100]
+        model = str(dispatch_options.get("model") or "").strip()[:120]
+        description = str(dispatch_options.get("description") or "").strip()[:1200]
+        salesperson = str(dispatch_options.get("salesperson") or "").strip()[:120]
+        measurement_type = str(dispatch_options.get("measurement_type") or "").strip()[:40]
+        measurements = str(dispatch_options.get("measurements") or "").strip()[:300]
+        raw_item_details = dispatch_options.get("item_details") if isinstance(dispatch_options.get("item_details"), list) else []
+        item_details = {}
+        for detail in raw_item_details[:30]:
+            if isinstance(detail, dict):
+                try: idx = int(detail.get("index", -1))
+                except (TypeError, ValueError): continue
+                if idx >= 0: item_details[idx] = {
+                    "product_id": str(detail.get("product_id") or "").strip()[:100],
+                    "model": str(detail.get("model") or "").strip()[:120],
+                    "salesperson": str(detail.get("salesperson") or "").strip()[:120],
+                    "measurement_type": str(detail.get("measurement_type") or "").strip()[:40],
+                    "measurements": str(detail.get("measurements") or "").strip()[:300],
+                    "handle_type": str(detail.get("handle_type") or "").strip()[:120],
+                    "color": str(detail.get("color") or "").strip()[:120],
+                    "description": str(detail.get("description") or "").strip()[:1200],
+                    "additional_text": str(detail.get("additional_text") or "").strip()[:1000],
+                }
+        rows = supabase_request("GET", "/rest/v1/customer_orders", params={"select":"*", "reference":f"eq.{reference}", "limit":"1"}) or []
+        if not rows: return jsonify(error="Customer order not found."), 404
+        order = rows[0]
+        status = str(order.get("status") or "Received").strip().casefold()
+        if status in {"cancelled", "canceled", "delivered"}:
+            return jsonify(error=f"A {order.get('status')} customer order cannot be dispatched to workers."), 409
+        # Dispatch-history writes are best-effort. A missing/unapplied optional migration must
+        # never prevent the actual Telegram send from happening.
+        dispatch_history_available = True
+        try:
+            prior = supabase_request("GET", "/rest/v1/worker_order_dispatches", params={"select":"reference,status", "reference":f"eq.{reference}", "limit":"1"}) or []
+            if prior:
+                supabase_request("PATCH", "/rest/v1/worker_order_dispatches", params={"reference":f"eq.{reference}"}, payload={"status":"sending", "last_error":None, "updated_at":dt.datetime.now(dt.timezone.utc).isoformat()})
+            else:
+                supabase_request("POST", "/rest/v1/worker_order_dispatches", payload={"reference":str(reference), "status":"sending", "last_error":None})
+        except Exception:
+            dispatch_history_available = False
+            log.exception("Dispatch history unavailable for order %s; continuing with Telegram send", reference)
+        items = order.get("items") if isinstance(order.get("items"), list) else []
+        dispatch_item_index = dispatch_options.get("dispatch_item_index")
+        single_product_dispatch = dispatch_item_index is not None
+        if single_product_dispatch:
+            try:
+                source_item_index = int(dispatch_item_index)
+            except (TypeError, ValueError):
+                return jsonify(error="Invalid product index for dispatch."), 400
+            if source_item_index < 0 or source_item_index >= len(items) or not isinstance(items[source_item_index], dict):
+                return jsonify(error="The selected product was not found in this customer order."), 400
+            items = [items[source_item_index]]
+            item_details = {0: item_details.get(0, {})}
+        lines = []
+        first_photo = ""
+        first_item = items[0] if items and isinstance(items[0], dict) else {}
+        for item_index, item in enumerate(items[:30]):
+            if not isinstance(item, dict): continue
+            name = str(item.get("name") or item.get("product_name") or item.get("title") or "Product")[:150]
+            qty = item.get("quantity", 1)
+            unit = item.get("unit_price", item.get("unit_price_etb", item.get("price_etb", item.get("price", 0))))
+            measurement = item.get("measurement") or item.get("measurements")
+            line = f"• {name} × {qty} — {unit} ETB each"
+            if measurement: line += f" · Measurement: {str(measurement)[:120]}"
+            detail = item_details.get(item_index, {})
+            item_product_id = detail.get("product_id") or str(item.get("product_id") or item.get("id") or "").strip()[:100]
+            item_model = detail.get("model") or str(item.get("model") or item.get("product_model") or "").strip()[:120]
+            if item_product_id: line += f" · Product ID: {item_product_id}"
+            if item_model: line += f" · Model: {item_model}"
+            lines.append(line)
+        # If no item lines are available, omit the section rather than sending placeholder text.
+        for candidate in (first_item.get("image_url"), first_item.get("image"), first_item.get("photo_url"), first_item.get("product_image"), first_item.get("photo")):
+            if isinstance(candidate, str) and candidate.startswith(("https://", "http://")):
+                first_photo = candidate.strip(); break
+        if not first_photo and isinstance(first_item.get("images"), list):
+            for candidate in first_item["images"]:
+                if isinstance(candidate, str) and candidate.startswith(("https://", "http://")):
+                    first_photo = candidate.strip(); break
+        customer = html.escape(str(order.get("customer_name") or "Not provided")[:120])
+        phone = html.escape(str(order.get("phone") or "Not provided")[:60])
+        location = html.escape(str(order.get("delivery_location") or order.get("delivery_area") or "To be confirmed")[:300])
+        notes = html.escape(str(order.get("notes") or "None")[:500])
+        items_text = "\n".join(html.escape(line) for line in lines)
+        selected_detail = item_details.get(0, {}) if single_product_dispatch else {}
+        # Product-specific details are optional; only entered values are included.
+        detail_values = {
+            "Product ID": selected_detail.get("product_id") or product_id,
+            "Model": selected_detail.get("model") or model,
+            "Salesman": selected_detail.get("salesperson") or salesperson,
+            "Handle type": selected_detail.get("handle_type") or str(dispatch_options.get("handle_type") or "").strip(),
+            "Color": selected_detail.get("color") or str(dispatch_options.get("color") or "").strip(),
+            "Measurement type": selected_detail.get("measurement_type") or measurement_type,
+            "Measurements": selected_detail.get("measurements") or measurements,
+            "Work instructions": selected_detail.get("description") or description,
+            "Additional text": selected_detail.get("additional_text") or str(dispatch_options.get("additional_text") or "").strip(),
+        }
+        optional_lines = [f"<b>{html.escape(label)}:</b> {html.escape(str(value))}" for label, value in detail_values.items() if value and str(value).strip()]
+        # Build a clean, modern production ticket; omit all blank optional fields.
+        product_name = str(first_item.get("name") or first_item.get("product_name") or first_item.get("title") or "").strip()
+        message_lines = ["<b>AMBAR FURNITURE</b>", "<b>CUSTOMER ORDER</b>", "", f"<b>Order reference:</b> {html.escape(str(reference))}"]
+        if product_name: message_lines.extend([f"<b>Product:</b> {html.escape(product_name)}"])
+        message_lines.extend(["", "━━━━━━━━━━━━━━━━━━", "<b>WORK DETAILS</b>", ""])
+        if optional_lines: message_lines.extend(optional_lines)
+        else: message_lines = message_lines[:-3]  # No empty work-details section when no optional details are entered.
+        # Privacy boundary: never forward customer identity/contact/address/payment/notes to workers.
+        message = "\n".join(message_lines)
+        try:
+            if first_photo:
+                caption = message[:1000]
+                telegram_result = bot_api("sendPhoto", {"chat_id": target_chat, "photo": first_photo, "caption": caption, "parse_mode":"HTML"})
+                if len(message) > 1000:
+                    bot_api("sendMessage", {"chat_id": target_chat, "text": message[1000:], "parse_mode":"HTML", "disable_web_page_preview":True})
+            else:
+                telegram_result = bot_api("sendMessage", {"chat_id": target_chat, "text": message, "parse_mode":"HTML", "disable_web_page_preview":True})
+        except Exception as send_exc:
+            try:
+                if dispatch_history_available:
+                    supabase_request("PATCH", "/rest/v1/worker_order_dispatches", params={"reference":f"eq.{reference}"}, payload={"status":"failed", "last_error":str(send_exc)[:300], "updated_at":dt.datetime.now(dt.timezone.utc).isoformat()})
+            except Exception: log.exception("Could not record failed worker dispatch for order %s", reference)
+            log.exception("Could not send order %s to workers Telegram group", reference)
+            return jsonify(error=(str(send_exc) or "Telegram message failed.")[:300]), 502
+        if dispatch_history_available:
+            try:
+                supabase_request("PATCH", "/rest/v1/worker_order_dispatches", params={"reference":f"eq.{reference}"}, payload={"status":"sent", "telegram_message_id":str((telegram_result or {}).get("message_id", "")), "last_error":None, "sent_at":dt.datetime.now(dt.timezone.utc).isoformat(), "updated_at":dt.datetime.now(dt.timezone.utc).isoformat()})
+            except Exception:
+                log.exception("Telegram sent for order %s but dispatch history could not be updated", reference)
+        return jsonify(ok=True, sent=True, already_sent=False, reference=reference, message=f"Order sent to Telegram destination {target_chat}.", dispatch_history_saved=dispatch_history_available), 200
+    except Exception as exc:
+        log.exception("Worker dispatch failed for customer order %s", reference)
+        return jsonify(error=(str(exc) or "Could not dispatch order to workers.")[:300]), 503
+
+
+@app.post("/api/admin/phase2/orders/<reference>/send-to-workshop")
+def phase2_send_order_to_workshop(reference):
+    """Manually create Workshop ERP workflow items for one saved customer order."""
+    _, error = admin_user_from_request()
+    if error: return error
+    if not supabase_enabled(): return jsonify(error="Supabase is not configured."), 503
+    try:
+        rows = supabase_request("GET", "/rest/v1/customer_orders", params={
+            "select":"*", "reference":f"eq.{reference}", "limit":"1"
+        }) or []
+        if not rows:
+            return jsonify(error="Customer order not found."), 404
+        order = rows[0]
+        status = str(order.get("status") or "Received").strip().casefold()
+        if status in {"cancelled", "canceled", "delivered"}:
+            return jsonify(error=f"A {order.get('status')} customer order cannot be sent to Workshop ERP."), 409
+        result = sync_confirmed_customer_order_to_workshop(order)
+        if result.get("already_imported") or result.get("created", 0) == 0:
+            return jsonify(ok=True, reference=reference, already_imported=True, created=0,
+                           message="This customer order is already linked to Workshop ERP. No duplicate workflow was created.")
+        return jsonify(ok=True, reference=reference, already_imported=False,
+                       created=result.get("created", 0), total_items=result.get("total_items", 0),
+                       message=f"Created {result.get('created', 0)} Workshop ERP workflow item(s) for customer order {reference}.")
+    except Exception as exc:
+        log.exception("Admin could not send customer order %s to Workshop ERP", reference)
+        return jsonify(error=(str(exc) or "Could not create Workshop ERP workflow order.")[:300]), 503
+
+
 @app.patch("/api/admin/phase2/orders/<reference>")
 def phase2_update_order(reference):
     _, error = admin_user_from_request()
@@ -2542,6 +3679,8 @@ def phase2_update_order(reference):
 
         status_changed = "status" in payload and str(before.get("status") or "Pending") != str(updated.get("status") or "Pending")
         fee_changed = "delivery_fee_etb" in payload and float(before.get("delivery_fee_etb") or 0) != float(updated.get("delivery_fee_etb") or 0)
+        # Customer orders are NOT automatically converted to Workshop ERP workflows.
+        # An authorized admin must use the explicit "Create Workshop Workflow Order" button.
         customer_notification_sent = False
         customer_notification_error = None
         if (status_changed or fee_changed) and before.get("telegram_user_id") and BOT_TOKEN:
@@ -2627,7 +3766,7 @@ def admin_security_report():
     user_id, error = admin_user_from_request()
     if error:
         return error
-    if user_id != ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if not is_main_admin_user(user_id):
         return jsonify(error="Only the main admin can view the full activity report."), 403
     if not supabase_enabled():
         return jsonify(error="Supabase is not configured; security reports require persistent Supabase storage."), 503
@@ -2641,6 +3780,18 @@ def admin_security_report():
             "select": "id,event_type,actor_telegram_id,request_path,request_method,status_code,ip_address,user_agent,details,created_at",
             "created_at": f"gte.{since}", "order": "created_at.desc", "limit": "1000"
         }) or []
+        # Resolve immutable actor IDs to the display names saved in the admin role table.
+        try:
+            role_rows = supabase_request("GET", "/rest/v1/ambar_admin_roles", params={
+                "select": "telegram_user_id,display_name", "limit": "1000"
+            }) or []
+            admin_names = {str(x.get("telegram_user_id")): str(x.get("display_name") or "").strip()
+                           for x in role_rows if x.get("telegram_user_id")}
+        except Exception:
+            admin_names = {}
+        for row in rows:
+            actor = str(row.get("actor_telegram_id") or "")
+            row["admin_name"] = admin_names.get(actor) or ("Admin " + actor if actor else "System / unknown")
         counts = {
             "total": len(rows),
             "sign_ins": sum(1 for row in rows if row.get("event_type") == "admin_sign_in"),
@@ -2754,6 +3905,151 @@ def admin_customer_directory():
     except Exception:
         log.exception("Could not load admin customer directory")
         return jsonify(error="Could not load customers. Check that phase2_orders_delivery_schema.sql and admin_security_reports_migration.sql have been applied."), 503
+
+
+@app.get("/api/admin/customer-profiles")
+def admin_customer_profiles_list():
+    _, error = admin_user_from_request()
+    if error: return error
+    if not supabase_enabled(): return jsonify(error="Supabase is required."), 503
+    try:
+        profiles = supabase_request("GET", "/rest/v1/customer_profiles", params={"select":"*", "order":"created_at.desc", "limit":"5000"}) or []
+        orders = supabase_request("GET", "/rest/v1/customer_orders", params={"select":"reference,telegram_user_id,customer_name,phone,delivery_location,status,total_etb,payment_status,remaining_balance_etb,items,created_at", "order":"created_at.desc", "limit":"5000"}) or []
+        workshop_rows = supabase_request("GET", "/rest/v1/workshop_erp_state", params={"select":"state", "id":"eq.1", "limit":"1"}) or []
+        state = (workshop_rows[0] or {}).get("state") if workshop_rows else {}
+        if not isinstance(state, dict): state = {}
+        sales = state.get("sales", []) if isinstance(state.get("sales", []), list) else []
+        products = state.get("products", []) if isinstance(state.get("products", []), list) else []
+        # The Sales Archive is authoritative. Include legacy SOLD units only when no matching sale exists.
+        sales = _merge_legacy_sold_products(sales, products)
+        # Auto-register customers when a checkout order or Workshop ERP sale is saved.
+        for source, kind in [(o, "order") for o in orders] + [(x, "workshop") for x in sales if str(x.get("status") or "").upper() == "SOLD"]:
+            name = str(source.get("customer_name") or source.get("customer") or "").strip()
+            phone = str(source.get("phone") or "").strip()
+            telegram_id = str(source.get("telegram_user_id") or "").strip()
+            if not name: continue
+            exists = next((c for c in profiles if (phone and str(c.get("phone") or "").strip() == phone) or (telegram_id and str(c.get("telegram_user_id") or "") == telegram_id)), None)
+            if exists: continue
+            payload = {"full_name":name[:200], "phone":(phone or "Not provided")[:50], "location":str(source.get("delivery_location") or source.get("location") or "")[:500], "telegram_user_id":telegram_id or None, "telegram_username":str(source.get("telegram_username") or "")[:100], "customer_type":"Individual", "customer_status":"Active", "sex":"", "secondary_phone":"", "service_notes":"", "measurements_notes":""}
+            try:
+                created = supabase_request("POST", "/rest/v1/customer_profiles", payload=payload) or []
+                if created: profiles.insert(0, created[0])
+            except Exception:
+                log.exception("Could not auto-create customer profile from saved sale/order")
+        for profile in profiles:
+            pid=str(profile.get("customer_id") or "")
+            phone=str(profile.get("phone") or "").strip()
+            tid=str(profile.get("telegram_user_id") or "")
+            matching_orders=[o for o in orders if (tid and str(o.get("telegram_user_id") or "")==tid) or (phone and str(o.get("phone") or "").strip()==phone) or (pid and str(o.get("customer_id") or "")==pid)]
+            matching_sales=[x for x in sales if str(x.get("status") or "").upper()=="SOLD" and ((phone and str(x.get("phone") or "").strip()==phone) or (str(x.get("customer") or "").strip().lower()==str(profile.get("full_name") or "").strip().lower()))]
+            order_total=sum(float(o.get("total_etb") or 0) for o in matching_orders if str(o.get("status") or "").lower()!="cancelled")
+            workshop_total=sum(float(x.get("price") or 0) for x in matching_sales)
+            profile["sales_orders"]=len(matching_orders)+len(matching_sales)
+            profile["sales_total_etb"]=round(order_total+workshop_total,2)
+            profile["paid_or_delivered_etb"]=round(sum(float(o.get("total_etb") or 0) for o in matching_orders if str(o.get("status") or "").lower()=="delivered")+sum(float(x.get("price") or 0) for x in matching_sales if str(x.get("paymentStatus") or "").lower() in ("paid","fully paid","fully_paid")),2)
+            history=[{"reference":o.get("reference"),"status":o.get("status"),"total_etb":o.get("total_etb"),"payment_status":o.get("payment_status"),"remaining_balance_etb":o.get("remaining_balance_etb"),"created_at":o.get("created_at"),"items":o.get("items"),"source":"Mini App Order"} for o in matching_orders]
+            history += [{"reference":x.get("productId") or x.get("serial") or x.get("id") or "Workshop Sale", "status":"SOLD", "total_etb":x.get("price"), "payment_status":x.get("paymentStatus") or "Unknown", "remaining_balance_etb":"", "created_at":x.get("soldAtISO") or x.get("soldAt") or x.get("date") or "", "items":[{"name":x.get("model") or x.get("name") or x.get("productId") or "Workshop product"}], "source":"Workshop ERP Sales Archive"} for x in matching_sales]
+            profile["order_history"]=sorted(history,key=lambda x:str(x.get("created_at") or ""),reverse=True)[:100]
+        return jsonify(customers=profiles)
+    except Exception:
+        log.exception("Could not load customer profiles and sales history")
+        return jsonify(error="Customer profiles could not load. Apply customer_profiles_migration.sql and refresh."),503
+
+@app.post("/api/admin/customer-profiles")
+def admin_customer_profiles_save():
+    _, error = admin_user_from_request()
+    if error: return error
+    if not supabase_enabled(): return jsonify(error="Supabase is required."),503
+    data=request.get_json(silent=True) or {}
+    def clean(v, limit=500): return str(v or "").strip()[:limit]
+    name=clean(data.get("full_name"),200)
+    phone=clean(data.get("phone"),50)
+    if not name or not phone: return jsonify(error="Full name and phone number are required."),400
+    telegram_id=clean(data.get("telegram_user_id"),80)
+    payload={"full_name":name,"sex":clean(data.get("sex"),40),"phone":phone,"secondary_phone":clean(data.get("secondary_phone"),50),"location":clean(data.get("location"),500),"telegram_user_id":telegram_id or None,"telegram_username":clean(data.get("telegram_username"),100),"customer_type":clean(data.get("customer_type"),40) or "Individual","service_notes":clean(data.get("service_notes"),3000),"measurements_notes":clean(data.get("measurements_notes"),3000),"customer_status":clean(data.get("customer_status"),40) or "Active","updated_at":dt.datetime.now(dt.timezone.utc).isoformat()}
+    try:
+        existing=[]
+        if data.get("customer_id"):
+            existing=supabase_request("GET","/rest/v1/customer_profiles",params={"select":"customer_id","customer_id":f"eq.{clean(data.get('customer_id'),40)}","limit":"1"}) or []
+        if existing:
+            rows=supabase_request("PATCH","/rest/v1/customer_profiles",params={"customer_id":f"eq.{clean(data.get('customer_id'),40)}"},payload=payload) or []
+        else:
+            payload["created_at"]=dt.datetime.now(dt.timezone.utc).isoformat()
+            rows=supabase_request("POST","/rest/v1/customer_profiles",payload=payload) or []
+        return jsonify(ok=True,customer=(rows[0] if rows else {}))
+    except Exception:
+        log.exception("Could not save customer profile")
+        return jsonify(error="Could not save customer. Apply customer_profiles_migration.sql and check required fields."),503
+
+
+@app.post("/api/admin/customer-profiles/export")
+def admin_customer_profiles_export():
+    user_id, error = admin_user_from_request()
+    if error: return error
+    if not supabase_enabled(): return jsonify(error="Supabase is required."),503
+    data=request.get_json(silent=True) or {}
+    fmt=str(data.get("format") or "pdf").lower()
+    action=str(data.get("action") or "download").lower()
+    recipient=str(data.get("recipientTelegramId") or "").strip()
+    if fmt not in ("pdf","xlsx"): return jsonify(error="Choose PDF or Excel (.xlsx)."),400
+    if action not in ("download","send"): return jsonify(error="Invalid export action."),400
+    if action=="send" and not re.fullmatch(r"\d{4,20}",recipient): return jsonify(error="Enter a numeric Telegram user ID."),400
+    try:
+        profiles=supabase_request("GET","/rest/v1/customer_profiles",params={"select":"*","order":"created_at.desc","limit":"5000"}) or []
+        orders=supabase_request("GET","/rest/v1/customer_orders",params={"select":"reference,telegram_user_id,customer_name,phone,status,total_etb,payment_status,created_at","order":"created_at.desc","limit":"5000"}) or []
+        wrows=supabase_request("GET","/rest/v1/workshop_erp_state",params={"select":"state","id":"eq.1","limit":"1"}) or []
+        state=(wrows[0] or {}).get("state") if wrows else {}; state=state if isinstance(state,dict) else {}
+        ws_sales=state.get("sales",[]) if isinstance(state.get("sales",[]),list) else []
+        ws_products=state.get("products",[]) if isinstance(state.get("products",[]),list) else []
+        ws_sales=_merge_legacy_sold_products(ws_sales,ws_products)
+        columns=["Customer ID","Full Name","Sex","Phone","Secondary Phone","Location","Telegram User ID","Telegram Username","Customer Type","Customer Status","Measurements / Preferences","Service / Warranty / Delivery Notes","Mini App Orders","Workshop Sales","Total Sales ETB","Delivered / Paid ETB","Registered At"]
+        records=[]
+        for c in profiles:
+            ph=str(c.get("phone") or "").strip(); tid=str(c.get("telegram_user_id") or "")
+            co=[o for o in orders if (tid and str(o.get("telegram_user_id") or "")==tid) or (ph and str(o.get("phone") or "").strip()==ph)]
+            ws=[x for x in ws_sales if str(x.get("status") or "").upper()=="SOLD" and ((ph and str(x.get("phone") or "").strip()==ph) or str(x.get("customer") or "").strip().lower()==str(c.get("full_name") or "").strip().lower())]
+            total=sum(float(o.get("total_etb") or 0) for o in co if str(o.get("status") or "").lower()!="cancelled")+sum(float(x.get("price") or 0) for x in ws)
+            paid=sum(float(o.get("total_etb") or 0) for o in co if str(o.get("status") or "").lower()=="delivered")+sum(float(x.get("price") or 0) for x in ws if str(x.get("paymentStatus") or "").lower() in ("paid","fully paid","fully_paid"))
+            records.append([c.get("customer_id",""),c.get("full_name",""),c.get("sex",""),c.get("phone",""),c.get("secondary_phone",""),c.get("location",""),c.get("telegram_user_id") or "",c.get("telegram_username",""),c.get("customer_type",""),c.get("customer_status",""),c.get("measurements_notes",""),c.get("service_notes",""),len(co),len(ws),round(total,2),round(paid,2),c.get("created_at","")])
+        filename="AMBAR_Customer_Information_"+dt.datetime.now().strftime("%Y%m%d_%H%M%S")+(".pdf" if fmt=="pdf" else ".xlsx")
+        buf=BytesIO()
+        if fmt=="xlsx":
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Alignment
+            wb=Workbook(); ws=wb.active; ws.title="Customer Information"; ws.append(columns)
+            for row in records: ws.append(row)
+            for cell in ws[1]: cell.font=Font(bold=True,color="FFFFFF"); cell.fill=PatternFill("solid",fgColor="242424"); cell.alignment=Alignment(wrap_text=True)
+            ws.freeze_panes="A2"; ws.auto_filter.ref=ws.dimensions
+            for col in ws.columns:
+                letter=col[0].column_letter; maxlen=max((len(str(cell.value or "")) for cell in col[:200]),default=12); ws.column_dimensions[letter].width=min(max(maxlen+2,12),38)
+            wb.save(buf); mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import landscape, A3
+            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.lib.units import mm
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+            from reportlab.lib.utils import simpleSplit
+            styles=getSampleStyleSheet(); doc=SimpleDocTemplate(buf,pagesize=landscape(A3),rightMargin=10*mm,leftMargin=10*mm,topMargin=10*mm,bottomMargin=10*mm)
+            table_data=[[Paragraph(str(v).replace('&','&amp;').replace('<','&lt;'),styles['BodyText']) for v in columns]]
+            for row in records: table_data.append([Paragraph(str(v if v is not None else '').replace('&','&amp;').replace('<','&lt;')[:180],styles['BodyText']) for v in row])
+            story=[Paragraph("AMBAR Furniture · Customer Information & Sales",styles['Title']),Paragraph("Editable source records remain in the Customer Information workspace. Export generated "+dt.datetime.now().strftime("%Y-%m-%d %H:%M UTC"),styles['Normal']),Spacer(1,5*mm)]
+            widths=[23*mm,28*mm,12*mm,22*mm,22*mm,28*mm,19*mm,20*mm,18*mm,17*mm,30*mm,30*mm,14*mm,14*mm,20*mm,20*mm,24*mm]
+            t=Table(table_data,colWidths=widths,repeatRows=1); t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#242424')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),6),('LEADING',(0,0),(-1,-1),7),('GRID',(0,0),(-1,-1),0.25,colors.HexColor('#aaaaaa')),('VALIGN',(0,0),(-1,-1),'TOP'),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f3f3f3')])]))
+            story.append(t); doc.build(story); mime="application/pdf"
+        content=buf.getvalue()
+        if action=="send":
+            if len(content)>48*1024*1024: return jsonify(error="Report exceeds Telegram's file-size limit; narrow the export."),413
+            upload=BytesIO(content); upload.name=filename
+            try: result=bot_api("sendDocument",{"chat_id":recipient,"caption":"AMBAR Customer Information & Sales report · "+str(len(records))+" customer(s)"},{"document":(filename,upload,mime)},timeout=60)
+            except Exception as exc:
+                log.exception("Could not send customer report to Telegram")
+                return jsonify(error="Telegram could not send this file. The recipient must open/start the AMBAR bot first. Details: "+str(exc)[:180]),502
+            return jsonify(ok=True,message="Customer "+fmt.upper()+" report sent to Telegram user "+recipient+".",messageId=(result or {}).get("message_id"))
+        return send_file(BytesIO(content),mimetype=mime,as_attachment=True,download_name=filename)
+    except Exception as exc:
+        log.exception("Could not export customer information")
+        return jsonify(error="Could not generate customer export. Check Render logs. Details: "+str(exc)[:180]),500
 
 
 @app.get("/api/admin/products")
@@ -2962,7 +4258,7 @@ def admin_delete_product(product_id):
     if error:
         return error
     # Permanent deletion is deliberately limited to the designated main admin.
-    if not ADMIN_PASSWORD_MANAGER_TELEGRAM_ID or user_id != ADMIN_PASSWORD_MANAGER_TELEGRAM_ID:
+    if not is_main_admin_user(user_id):
         return jsonify(error="Permanent product deletion is restricted to the main selection admin."), 403
     if not re.fullmatch(r"admin_[a-f0-9]{16}", product_id):
         return jsonify(error="This is a built-in catalogue product. Only admin-added products can currently be permanently deleted; built-in products are protected."), 400
@@ -3024,11 +4320,11 @@ def health():
 def authenticated_telegram_user():
     load_product_catalog()
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data)
+    valid, user_id = validate_telegram_init_data(init_data) if init_data else (False, None)
     if not valid or not user_id:
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_or_missing_telegram_auth"})
-        return jsonify(authenticated=False, error="Telegram authentication failed. Open the Mini App from the AMBAR Telegram bot."), 401
+        return jsonify(authenticated=False, error="Customer sign-in could not be started. Please refresh the page.", error_code="customer_session_unavailable"), 401
     try:
         pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
         user = json.loads(pairs.get("user", "{}"))
@@ -3037,7 +4333,7 @@ def authenticated_telegram_user():
     except (ValueError, TypeError, json.JSONDecodeError):
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_signed_profile_data"})
-        return jsonify(authenticated=False, error="Telegram profile data is invalid."), 401
+        return jsonify(authenticated=False, error="Telegram profile data is invalid.", error_code="telegram_profile_payload_invalid"), 401
     # Profile fields are read from Telegram's signed initData only after HMAC verification.
     safe_user = {
         "id": user_id,
@@ -3047,9 +4343,33 @@ def authenticated_telegram_user():
         "language_code": clean_text(user.get("language_code", ""), 20, "Language"),
         "photo_url": clean_text(user.get("photo_url", ""), 2000, "Profile photo URL"),
     }
+    # Reconnect the verified Telegram identity to its existing AMBAR customer
+    # profile. Never match by name or accept a customer ID from the browser.
+    saved_customer_profile = None
+    if supabase_enabled():
+        try:
+            profile_rows = supabase_request("GET", "/rest/v1/customer_profiles", params={
+                "select": "customer_id,full_name,phone,location,telegram_user_id,telegram_username,customer_type,customer_status",
+                "telegram_user_id": f"eq.{user_id}", "limit": "2"
+            }) or []
+            if len(profile_rows) == 1:
+                row = profile_rows[0]
+                saved_customer_profile = {
+                    "customer_id": clean_text(row.get("customer_id", ""), 80, "Customer ID"),
+                    "full_name": clean_text(row.get("full_name", ""), 100, "Customer name"),
+                    "phone": clean_text(row.get("phone", ""), 50, "Customer phone"),
+                    "location": clean_text(row.get("location", ""), 500, "Customer location"),
+                    "telegram_username": clean_text(row.get("telegram_username", ""), 100, "Telegram username"),
+                    "customer_type": clean_text(row.get("customer_type", ""), 40, "Customer type"),
+                    "customer_status": clean_text(row.get("customer_status", ""), 40, "Customer status"),
+                }
+            elif len(profile_rows) > 1:
+                log.error("Multiple customer profiles are linked to verified Telegram ID %s; profile autofill skipped", user_id)
+        except Exception:
+            log.exception("Could not load saved customer profile for verified Telegram ID %s", user_id)
     # Show the admin entry point to the owner and any active staff account saved
     # in Supabase. Staff do not need to be added to the Render allowlist.
-    is_owner = bool(ADMIN_PASSWORD_MANAGER_TELEGRAM_ID and user_id == ADMIN_PASSWORD_MANAGER_TELEGRAM_ID)
+    is_owner = is_main_admin_user(user_id)
     role_data = None if is_owner else admin_permissions_for(user_id)
     is_admin = is_owner or bool(role_data and role_data.get("active", False) and role_data.get("role") != "disabled")
     permissions = ["*"] if is_owner else ((role_data or {}).get("permissions") or (["orders"] if (role_data or {}).get("role") == "orders" else []))
@@ -3064,7 +4384,7 @@ def authenticated_telegram_user():
     has_main_admin_access = bool(is_admin and (is_owner or "*" in effective_permissions or non_workshop_permissions))
     has_workshop_access = bool(is_admin and (is_owner or "*" in effective_permissions or "workshop_erp" in effective_permissions))
     workshop_only_role = bool(has_workshop_access and not has_main_admin_access)
-    return jsonify(authenticated=True, user=safe_user, is_admin=is_admin,
+    return jsonify(authenticated=True, user=safe_user, customer_profile=saved_customer_profile, is_admin=is_admin,
                    admin_permissions=permissions if is_admin else [],
                    has_main_admin_access=has_main_admin_access,
                    has_workshop_access=has_workshop_access,
@@ -3271,7 +4591,7 @@ def chapa_api_request(method, path, *, payload=None, timeout=25):
         body = {}
     if not response.ok:
         log.error("Chapa API error: HTTP %s; body=%s", response.status_code, str(body)[:700])
-        raise RuntimeError("Chapa could not start or verify this payment. Please try again or choose bank transfer/Telebirr.")
+        raise RuntimeError("Chapa could not start or verify this payment. Please try again or choose Pay Later.")
     return body
 
 
@@ -3388,8 +4708,8 @@ def submit_order_with_payment_choice():
         payer = "buyer"
 
     payment_option = clean_text(request.form.get("payment_option"), 20, "Payment option", True)
-    if payment_option not in {"pay_now", "pay_later", "chapa"}:
-        return jsonify(error="Choose Chapa, payment screenshot, or Pay Later."), 400
+    if payment_option not in {"pay_later", "chapa"}:
+        return jsonify(error="Choose Chapa or Pay Later."), 400
     try:
         payment_percentage = int(request.form.get("payment_percentage", "50" if payment_option != "pay_later" else "0"))
     except (TypeError, ValueError):
@@ -3445,7 +4765,7 @@ def submit_order_with_payment_choice():
             if not gps_settings or not gps_settings.get("active") or gps_settings.get("origin_lat") is None or gps_settings.get("origin_lon") is None:
                 return jsonify(error="AMBAR store GPS coordinates are not configured. Please contact AMBAR before choosing team delivery."), 503
             delivery_distance_km = round(haversine_km(gps_settings["origin_lat"], gps_settings["origin_lon"], gps_lat, gps_lon), 2)
-            delivery_fee = round(float(gps_settings.get("base_fee_etb", 50) or 0) + (float(gps_settings.get("price_per_km", 10) or 0) * delivery_distance_km), 2)
+            delivery_fee = round(float(gps_settings.get("price_per_km", 0) or 0) * delivery_distance_km, 2)
             delivery_area = "AMBAR Team Delivery (GPS)"
     except (ValueError, TypeError):
         return jsonify(error="Please refresh your GPS location or select a valid map pin and try again."), 400
@@ -3577,7 +4897,7 @@ def submit_order_with_payment_choice():
             chapa_checkout_url = None
             if payment_option == "chapa":
                 if not CHAPA_SECRET_KEY:
-                    return jsonify(error="Chapa is not configured yet. AMBAR can still accept bank transfer, Telebirr screenshots, or Pay Later."), 503
+                    return jsonify(error="Chapa is not configured yet. Please choose Pay Later or contact AMBAR."), 503
                 if not all(item.get("unit_price", 0) > 0 for item in items):
                     return jsonify(error="Chapa checkout requires confirmed product prices."), 400
                 first_name, _, last_name = (customer.get("name", "Customer").strip().partition(" "))
@@ -3602,7 +4922,7 @@ def submit_order_with_payment_choice():
                     supabase_request("PATCH", "/rest/v1/customer_orders", params={"reference":f"eq.{reference}"}, payload={"chapa_reference":provider_reference,"chapa_checkout_url":chapa_checkout_url,"payment_status":f"Chapa {payment_percentage}% advance payment pending","updated_at":dt.datetime.now(dt.timezone.utc).isoformat()})
                 except Exception as chapa_exc:
                     log.exception("Could not initialize Chapa for order %s", reference)
-                    return jsonify(error=str(chapa_exc) if "not configured" in str(chapa_exc).lower() else "Your order was saved, but Chapa checkout could not be opened. Please try again or choose bank transfer/Telebirr."), 502
+                    return jsonify(error=str(chapa_exc) if "not configured" in str(chapa_exc).lower() else "Your order was saved, but Chapa checkout could not be opened. Please try again or choose Pay Later."), 502
         except Exception:
             log.exception("Could not persist order %s; order tracking is required", reference)
             return jsonify(error="Your order could not be saved to My Orders. Please check the connection and try again, or contact AMBAR."), 503
@@ -4053,6 +5373,21 @@ def start_telegram_polling():
         telegram_app.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
         async def runner():
             await telegram_app.initialize()
+            # Fail closed if Render accidentally has the production/old bot token.
+            me = await telegram_app.bot.get_me()
+            actual_username = str(me.username or "").lstrip("@")
+            if actual_username.casefold() != BOT_PUBLIC_USERNAME.casefold():
+                raise RuntimeError(
+                    f"Wrong Telegram bot token on this V2 service: expected @{BOT_PUBLIC_USERNAME}, "
+                    f"but BOT_TOKEN belongs to @{actual_username or 'unknown'}. Update only the V2 Render BOT_TOKEN."
+                )
+            await telegram_app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Open AMBAR",
+                    web_app=WebAppInfo(url=WEBAPP_URL)
+                )
+            )
+            log.info("Verified new Telegram bot @%s and configured its Mini App menu button", actual_username)
             if telegram_app.job_queue is not None:
                 try:
                     notification_tz = ZoneInfo(NOTIFICATION_TIMEZONE)
@@ -4082,13 +5417,15 @@ def start_telegram_polling():
 
 
 
-AUTO_CONFIRM_DELAY_MINUTES = 5
-AUTO_CONFIRM_POLL_SECONDS = 30
+# Customer order status is controlled by the admin. Automatic Received -> Confirmed
+# transitions are intentionally disabled to keep customer tracking aligned with admin status.
 _auto_confirm_thread_started = False
 
 
 def auto_confirm_received_orders_once():
-    """Auto-confirm standard orders after five minutes and notify each customer."""
+    """Legacy compatibility stub; automatic order status changes are disabled."""
+    return
+    # Historical implementation intentionally retained below for traceability.
     if not supabase_enabled():
         return
     now = dt.datetime.now(dt.timezone.utc)
@@ -4152,16 +5489,36 @@ def auto_confirm_orders_loop():
         time.sleep(AUTO_CONFIRM_POLL_SECONDS)
 
 
+def validate_v2_deployment_environment():
+    """Fail closed unless this service is configured for the dedicated V2 bot and database."""
+    if not BOT_TOKEN:
+        raise RuntimeError("V2 startup blocked: set BOT_TOKEN or AMBAR_V2_BOT_TOKEN to the token for @AMBAR_SALESBOT.")
+    if BOT_PUBLIC_USERNAME.casefold() != "ambar_salesbot":
+        raise RuntimeError("V2 startup blocked: BOT_PUBLIC_USERNAME must be AMBAR_SALESBOT.")
+    if not WEBAPP_URL.startswith("https://"):
+        raise RuntimeError("V2 startup blocked: WEBAPP_URL must be the HTTPS V2 Render URL.")
+    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+        raise RuntimeError("V2 startup blocked: set AMBAR_V2_SUPABASE_URL and AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY for the separate V2 Supabase project.")
+    if not SUPABASE_URL.startswith("https://") or ".supabase.co" not in SUPABASE_URL:
+        raise RuntimeError("V2 startup blocked: AMBAR_V2_SUPABASE_URL must be the HTTPS URL of the dedicated V2 Supabase project.")
+    try:
+        response = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=12)
+        payload = response.json()
+    except Exception as exc:
+        raise RuntimeError(f"V2 startup blocked: Telegram bot identity check failed ({type(exc).__name__}).") from exc
+    actual = str((payload.get("result") or {}).get("username") or "").lstrip("@") if payload.get("ok") else ""
+    if actual.casefold() != "ambar_salesbot":
+        raise RuntimeError(f"V2 startup blocked: BOT_TOKEN belongs to @{actual or 'unknown'}, not @AMBAR_SALESBOT. The old production bot will not be started by this service.")
+    log.info("V2 deployment preflight passed: Telegram bot=@%s; V2 Supabase project URL configured; Telegram-only access enabled.", actual)
+
+
 def main():
     global telegram_thread_started, _auto_confirm_thread_started
-    if BOT_TOKEN and not telegram_thread_started:
+    validate_v2_deployment_environment()
+    if not telegram_thread_started:
         thread = threading.Thread(target=start_telegram_polling, name="telegram-polling", daemon=True)
         thread.start()
         telegram_thread_started = True
-    if not _auto_confirm_thread_started:
-        thread = threading.Thread(target=auto_confirm_orders_loop, name="order-auto-confirm", daemon=True)
-        thread.start()
-        _auto_confirm_thread_started = True
     # Render should run this file as a single process: python bot.py
     # Do not run a separate local polling copy while this service is active.
     port = int(os.getenv("PORT", "10000"))
