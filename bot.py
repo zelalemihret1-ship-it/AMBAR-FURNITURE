@@ -715,7 +715,7 @@ def validate_telegram_init_data(init_data):
             log.warning("Telegram Mini App auth rejected: signed user field missing")
             return False, None
         data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(pairs.items()))
-        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
+        secret_key = hmac.new(BOT_TOKEN.encode("utf-8"), b"WebAppData", hashlib.sha256).digest()
         calculated = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(calculated, received_hash.lower()):
             log.warning("Telegram Mini App auth rejected: HMAC mismatch (check V2 BOT_TOKEN belongs to the launching bot)")
