@@ -21,8 +21,8 @@ try:
     from PIL import Image, ImageDraw, ImageFont, ImageOps
 except ImportError:  # image card falls back to the original product photo
     Image = ImageDraw = ImageFont = ImageOps = None
-from flask import Flask, g, jsonify, request, send_from_directory, send_file, session
-from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp
+from flask import Flask, g, jsonify, request, send_from_directory, send_file
+from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
 from werkzeug.utils import secure_filename
 
@@ -33,29 +33,23 @@ except ImportError:
     pass
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
-# Telegram Bot API requests contain the bot token in their URL. Never allow
-# httpx/httpcore INFO logs to print those URLs into Render logs.
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("ambar-furniture")
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/tmp/ambar_custom_uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Accept the dedicated V2 variable as well as the conventional BOT_TOKEN.
-# Both names may be set to the same @AMBAR_SALESBOT token in Render.
-BOT_TOKEN = (os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("AMBAR_V2_BOT_TOKEN") or "").strip()
-SERVICE_CHAT_ID = os.getenv("SERVICE_CHAT_ID", "").strip()
+BOT_TOKEN = (os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+SERVICE_CHAT_ID = (os.getenv("SERVICE_CHAT_ID") or os.getenv("SERVICE_CHAT_ID", "")).strip()
 WORKERS_TELEGRAM_CHAT_ID = os.getenv("WORKERS_TELEGRAM_CHAT_ID", "").strip()
 AMBAR_LOCATION_URL = "https://maps.app.goo.gl/fxCmYYKzLtYae5GeA"
 CHAPA_SECRET_KEY = os.getenv("CHAPA_SECRET_KEY", "").strip()
 CHAPA_WEBHOOK_SECRET = os.getenv("CHAPA_WEBHOOK_SECRET", "").strip()
 CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip().rstrip("/")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-dvit.onrender.com/").strip()
-BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "AMBAR_SALESBOT").strip().lstrip("@")
-REQUIRE_TELEGRAM_AUTH = True  # Customer access is Telegram Mini App only.
-WEB_CUSTOMER_MODE = False  # Disable independent browser customer sessions.
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-miniapp.onrender.com/").strip()
+BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "ambar_salesbot").strip().lstrip("@")
+TELEGRAM_CHANNEL_INVITE_URL = os.getenv("TELEGRAM_CHANNEL_INVITE_URL", "https://t.me/+YO20OQ1F1VIyMWZk").strip()
+REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "true").strip().lower() in {"1", "true", "yes", "on"}
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
 
 CATEGORIES = ["Shoe Shelf", "Consul Table", "Center Table", "TV Stand", "Chest Drawer", "Dining Table", "Wardrobe", "Other"]
@@ -69,18 +63,18 @@ PRODUCT_IMAGE_DIR = Path(os.getenv("PRODUCT_IMAGE_DIR", str(BASE_DIR / "products
 PRODUCT_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 ADMIN_TELEGRAM_IDS = {x.strip() for x in os.getenv("ADMIN_TELEGRAM_IDS", "").split(",") if x.strip()}
 ADMIN_PASSWORD_MANAGER_TELEGRAM_ID = os.getenv("ADMIN_PASSWORD_MANAGER_TELEGRAM_ID", "").strip()
-ADMIN_EMERGENCY_PASSWORD = os.getenv("ADMIN_EMERGENCY_PASSWORD", "")
+ADMIN_EMERGENCY_PASSWORD = os.getenv("ADMIN_EMERGENCY_PASSWORD") or os.getenv("ADMIN_EMERGENCY_PAS") or ""
 ADMIN_EMERGENCY_SESSIONS = {}
 WORKSHOP_STAFF_SESSIONS = {}
 ADMIN_PASSWORD_ATTEMPTS = {}
 ADMIN_PASSWORD_LOCK = threading.Lock()
 MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
-SUPABASE_URL = os.getenv("AMBAR_V2_SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or os.getenv("AMBAR_V2_SUPABASE_URL") or "").strip().rstrip("/")
 # Prefer the legacy service_role JWT for server-to-server Authorization. Some
 # projects also provide a newer sb_secret_* API key; keep it as the apikey when
 # configured, while the service-role JWT remains the Authorization credential.
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY", "").strip()
-SUPABASE_SECRET_KEY = os.getenv("AMBAR_V2_SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_SERVICE_ROLE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SERVICE_ROLE_KEY") or "").strip()
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_AUTHORIZATION_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
 SUPABASE_PRODUCTS_TABLE = os.getenv("SUPABASE_PRODUCTS_TABLE", "products").strip() or "products"
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "product-images").strip() or "product-images"
@@ -274,15 +268,6 @@ def product_image_upload_from_request(product_id, image, *, updating=False):
     return "/products/" + filename
 
 app = Flask(__name__, static_folder=None)
-app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SESSION_SIGNING_SECRET") or secrets.token_hex(32)
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=True, PERMANENT_SESSION_LIFETIME=dt.timedelta(days=30))
-
-def web_customer_id():
-    """Stable anonymous browser identity; grants customer functions only, never admin access."""
-    if not session.get("ambar_web_customer_id"):
-        session["ambar_web_customer_id"] = "web-" + secrets.token_urlsafe(18)
-        session.permanent = True
-    return session["ambar_web_customer_id"]
 
 
 def verified_telegram_admin():
@@ -680,54 +665,28 @@ def clean_text(value, limit, field, required=False):
 
 
 def validate_telegram_init_data(init_data):
-    """Verify Telegram Mini App initData using the bot-token HMAC scheme.
-
-    Telegram's bot-token HMAC data-check string includes every received field
-    except ``hash``. In particular, keep the optional ``signature`` field in
-    this check. Telegram's separate third-party Ed25519 check excludes both
-    ``hash`` and ``signature``; that is a different validation procedure.
-    """
-    if not BOT_TOKEN:
-        log.error("Telegram Mini App auth unavailable: BOT_TOKEN is not configured on this V2 service")
-        return False, None
-    if not init_data or not isinstance(init_data, str):
-        log.warning("Telegram Mini App auth rejected: X-Telegram-Init-Data header is missing or empty")
+    """Validate Telegram Web App initData using Telegram's documented HMAC scheme."""
+    if not BOT_TOKEN or not init_data:
         return False, None
     try:
-        parsed = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True)
-        # Reject duplicate keys instead of silently accepting an ambiguous payload.
-        if len({key for key, _ in parsed}) != len(parsed):
-            log.warning("Telegram Mini App auth rejected: duplicate initData fields")
-            return False, None
-        pairs = dict(parsed)
+        pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
         received_hash = pairs.pop("hash", None)
-        # Keep all fields other than hash in the bot-token HMAC check string.
-        # This includes Telegram's optional Ed25519 ``signature`` field.
-        if not received_hash or not re.fullmatch(r"[0-9a-fA-F]{64}", received_hash):
-            log.warning("Telegram Mini App auth rejected: missing or malformed hash")
+        if not received_hash or not re.fullmatch(r"[0-9a-f]{64}", received_hash):
             return False, None
         auth_date = int(pairs.get("auth_date", "0"))
+        # Reject missing, future-dated, or stale initData (24-hour maximum age).
         now = int(time.time())
         if auth_date <= 0 or auth_date > now + 60 or now - auth_date > 86400:
-            log.warning("Telegram Mini App auth rejected: auth_date outside allowed window")
-            return False, None
-        if not pairs.get("user"):
-            log.warning("Telegram Mini App auth rejected: signed user field missing")
             return False, None
         data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(pairs.items()))
-        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
-        calculated = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calculated, received_hash.lower()):
-            log.warning("Telegram Mini App auth rejected: HMAC mismatch (check V2 BOT_TOKEN belongs to the launching bot)")
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calculated, received_hash):
             return False, None
         user = json.loads(pairs.get("user", "{}"))
         user_id = user.get("id")
-        if user_id is None:
-            log.warning("Telegram Mini App auth rejected: signed user ID missing")
-            return False, None
-        return True, str(user_id)
+        return True, str(user_id) if user_id is not None else None
     except (ValueError, TypeError, json.JSONDecodeError):
-        log.warning("Telegram Mini App auth rejected: malformed initData payload")
         return False, None
 
 
@@ -744,8 +703,10 @@ def require_auth_from_request():
 
 
 def auth_result(init_data):
-    """Customer endpoints accept only a verified Telegram Mini App identity."""
-    return validate_telegram_init_data(init_data)
+    if not REQUIRE_TELEGRAM_AUTH:
+        return True, None
+    valid, user_id = validate_telegram_init_data(init_data)
+    return valid, user_id
 
 
 def telegram_username_from_init_data(init_data):
@@ -1135,42 +1096,6 @@ def parse_standard_order(data):
     material = clean_text(data.get("material", ""), 120, "Material preference")
     notes = clean_text(data.get("notes", ""), 1000, "Notes")
     return customer, normalized, total, finish, material, notes
-
-
-@app.get("/api/health")
-def api_health():
-    """Non-secret V2 diagnostics, including proof that BOT_TOKEN belongs to the new bot."""
-    actual_username = None
-    bot_identity_ok = False
-    bot_identity_error = None
-    if BOT_TOKEN:
-        try:
-            response = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=8)
-            payload = response.json()
-            if response.ok and payload.get("ok") and isinstance(payload.get("result"), dict):
-                actual_username = str(payload["result"].get("username") or "").lstrip("@")
-                bot_identity_ok = actual_username.casefold() == BOT_PUBLIC_USERNAME.casefold()
-            else:
-                bot_identity_error = "Telegram rejected the configured bot token"
-        except Exception as exc:
-            bot_identity_error = type(exc).__name__
-    return jsonify({
-        "status": "ok",
-        "service": "ambar-furniture-miniapp-v2",
-        "telegram_bot_token_configured": bool(BOT_TOKEN),
-        "telegram_expected_bot_username": BOT_PUBLIC_USERNAME,
-        "telegram_actual_bot_username": actual_username,
-        "telegram_bot_identity_ok": bot_identity_ok,
-        "telegram_bot_identity_error": bot_identity_error,
-        "webapp_url": WEBAPP_URL,
-        "webapp_url_configured": bool(WEBAPP_URL),
-        "supabase_configured": bool(supabase_enabled()),
-        "telegram_auth_required": REQUIRE_TELEGRAM_AUTH,
-        "web_customer_mode": WEB_CUSTOMER_MODE,
-        "web_customer_auth_available": WEB_CUSTOMER_MODE,
-        "telegram_bot_optional": False,
-        "access_modes": ["telegram_mini_app", "independent_web_app"] if WEB_CUSTOMER_MODE else ["telegram_mini_app"],
-    }), 200
 
 
 @app.get("/")
@@ -2174,9 +2099,9 @@ def public_delivery_areas():
 
 @app.route("/api/my-app-state", methods=["GET", "PUT"])
 def my_app_state():
-    """Synchronize cart and favorites for the current authenticated customer session."""
+    """Synchronize a customer's cart and favorites across devices using signed Telegram identity."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = auth_result(init_data)
+    valid, user_id = validate_telegram_init_data(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to sync your account across devices."), 401
     if not supabase_enabled():
@@ -2217,95 +2142,11 @@ def my_app_state():
         return jsonify(error="Could not synchronize cart and favorites. Check the supplied Supabase SQL migration."), 503
 
 
-@app.get("/api/admin/customer-favorites-report")
-def admin_customer_favorites_report():
-    """Main-admin report of customers' currently saved favorite products."""
-    user_id, error = admin_user_from_request()
-    if error: return error
-    if not is_main_admin_user(user_id):
-        return jsonify(error="Only the Main Admin can view the complete customer favorites report."), 403
-    if not supabase_enabled():
-        return jsonify(error="Supabase is required for the customer favorites report."), 503
-    try:
-        states = supabase_request("GET", "/rest/v1/customer_app_state", params={
-            "select":"telegram_user_id,favorites,updated_at", "order":"updated_at.desc", "limit":"10000"
-        }) or []
-        try:
-            profiles = supabase_request("GET", "/rest/v1/customer_profiles", params={
-                "select":"customer_id,full_name,phone,location,telegram_user_id,telegram_username,customer_type,customer_status,created_at", "limit":"10000"
-            }) or []
-        except Exception:
-            log.warning("Customer profiles unavailable for favorites report; showing verified Telegram IDs only.")
-            profiles = []
-        profile_by_telegram = {str(x.get("telegram_user_id")): x for x in profiles if x.get("telegram_user_id")}
-        try:
-            product_rows = supabase_list_products(include_inactive=True)
-        except Exception:
-            log.exception("Product catalogue unavailable for favorites report")
-            product_rows = []
-        product_by_id = {}
-        for product in product_rows:
-            pid = str(product.get("id") or product.get("product_id") or product.get("sku") or "")
-            if not pid: continue
-            product_by_id[pid] = {
-                "product_id": pid,
-                "name": product.get("name") or product.get("title") or product.get("product_name") or "Unnamed product",
-                "name_am": product.get("name_am") or "",
-                "category": product.get("category") or product.get("product_type") or "Uncategorized",
-                "price_etb": product.get("price") if product.get("price") is not None else product.get("price_etb"),
-                "description": product.get("description") or "",
-                "specifications": product.get("specifications") if isinstance(product.get("specifications"), dict) else {},
-                "stock_status": product.get("stock_status") or ("in_stock" if product.get("active", True) else "inactive"),
-                "active": bool(product.get("active", True)),
-                "pinned": bool(product.get("pinned", False)),
-                "image_url": product.get("image_url") or (product.get("images", [None])[0] if isinstance(product.get("images"), list) and product.get("images") else ""),
-            }
-        customers = []
-        product_counts = {}
-        total_favorites = 0
-        for state in states:
-            telegram_id = str(state.get("telegram_user_id") or "")
-            favorites = state.get("favorites") if isinstance(state.get("favorites"), list) else []
-            unique_ids = list(dict.fromkeys(str(x) for x in favorites if x is not None and str(x).strip()))
-            if not unique_ids: continue
-            profile = profile_by_telegram.get(telegram_id, {})
-            favorite_products = []
-            for pid in unique_ids:
-                product = product_by_id.get(pid, {"product_id":pid,"name":"Product details unavailable","category":"Unknown","price_etb":None,"description":"","specifications":{},"stock_status":"unknown","active":None,"pinned":False,"image_url":""})
-                favorite_products.append(product)
-                product_counts.setdefault(pid, {"product":product, "favorite_count":0})["favorite_count"] += 1
-                total_favorites += 1
-            customers.append({
-                "telegram_user_id":telegram_id,
-                "customer_id":profile.get("customer_id") or "",
-                "name":profile.get("full_name") or "Telegram customer",
-                "username":profile.get("telegram_username") or "",
-                "phone":profile.get("phone") or "",
-                "location":profile.get("location") or "",
-                "customer_type":profile.get("customer_type") or "",
-                "customer_status":profile.get("customer_status") or "",
-                "profile_created_at":profile.get("created_at") or "",
-                "favorites_count":len(unique_ids),
-                "favorites_updated_at":state.get("updated_at") or "",
-                "favorites":favorite_products,
-            })
-        customers.sort(key=lambda x:(-x["favorites_count"], x["name"].lower()))
-        popular = sorted(product_counts.values(), key=lambda x:(-x["favorite_count"], str(x["product"].get("name") or "").lower()))
-        return jsonify(ok=True, customers=customers, popular_products=popular,
-                       summary={"customers_with_favorites":len(customers),"favorite_selections":total_favorites,
-                                 "distinct_products_favorited":len(product_counts),"customers_with_profile":sum(1 for c in customers if c.get("customer_id")),
-                                 "generated_at":dt.datetime.now(dt.timezone.utc).isoformat(),
-                                 "scope":"Current saved favorites per customer; not a historical add/remove event log."})
-    except Exception:
-        log.exception("Could not build customer favorites report")
-        return jsonify(error="Could not load customer favorites. Confirm customer_app_state and product catalogue tables are available in the staging database."), 503
-
-
 @app.post("/api/my-orders/<reference>/confirm-delivered")
 def confirm_delivered_order(reference):
     """Let the authenticated customer confirm actual receipt even if staff have not yet marked Delivered."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = auth_result(init_data)
+    valid, user_id = validate_telegram_init_data(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to confirm delivery."), 401
     if not supabase_enabled():
@@ -2343,11 +2184,11 @@ def confirm_delivered_order(reference):
 @app.get("/api/my-orders")
 def my_orders():
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    # Ownership is scoped to the signed browser session in web-only mode, or
-    # to Telegram's signed identity when Telegram authentication is enabled.
-    valid, user_id = auth_result(init_data)
+    # Order ownership must always come from Telegram's signed initData, even if
+    # REQUIRE_TELEGRAM_AUTH is disabled for local development elsewhere in the app.
+    valid, user_id = validate_telegram_init_data(init_data)
     if not valid or not user_id:
-        return jsonify(error="Your customer session expired. Refresh the page and try again."), 401
+        return jsonify(error="Open AMBAR from its Telegram bot to view your orders. If you are already in Telegram, close and reopen the Mini App."), 401
     if not supabase_enabled():
         return jsonify(orders=[], configured=False)
     try:
@@ -2362,7 +2203,7 @@ def my_orders():
 def cancel_my_order(reference):
     """Allow a customer to cancel only their own order before preparation starts."""
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = auth_result(init_data)
+    valid, user_id = validate_telegram_init_data(init_data)
     if not valid or not user_id:
         return jsonify(error="Open AMBAR from your Telegram bot to manage your orders."), 401
     if not supabase_enabled():
@@ -2482,7 +2323,6 @@ ADMIN_SECTION_BUTTONS = [
     {"id":"tracking","label":"Order Tracking","tab":"tracking","permission":"orders"},
     {"id":"delivery","label":"Delivery Fees","tab":"delivery","permission":"delivery"},
     {"id":"dashboard","label":"Sales Dashboard","tab":"dashboard","permission":"dashboard"},
-    {"id":"favoritesreport","label":"⭐ Customer Favorites Report","tab":"favoritesreport","permission":"customers"},
     {"id":"service","label":"Customer Service","tab":"service","permission":"service"},
     {"id":"customers","label":"Customers","tab":"customers","permission":"customers"},
     {"id":"security","label":"Security Reports","tab":"security","permission":"security"},
@@ -2564,12 +2404,6 @@ def admin_interface_settings_save():
     incoming_content = settings.get("content") if isinstance(settings.get("content"), dict) else {}
     content = {key:clean_text(incoming_content.get(key, fallback), 500, "Interface page copy", False) for key,fallback in content_defaults.items()}
     visibility = {key:bool(incoming_v.get(key, True)) for key in ("favorites","service","about","track")}
-    incoming_defaults = settings.get("defaults") if isinstance(settings.get("defaults"), dict) else {}
-    allowed_periods = {"daily", "weekly", "monthly", "yearly"}
-    default_period = str(incoming_defaults.get("financePeriod", "weekly")).lower()
-    if default_period not in allowed_periods: default_period = "weekly"
-    default_sort = str(incoming_defaults.get("productSort", "featured"))
-    if default_sort not in {"featured", "newest", "price_asc", "price_desc"}: default_sort = "featured"
     incoming_layout = settings.get("layout") if isinstance(settings.get("layout"), dict) else {}
     allowed_layout = ["navigation", "category_title", "product_grid", "footer"]
     requested_order = incoming_layout.get("order", allowed_layout)
@@ -2601,7 +2435,7 @@ def admin_interface_settings_save():
         try: element_padding = max(0, min(48, int(float(item.get("padding", 0) or 0))))
         except (TypeError, ValueError): element_padding = 0
         elements.append({"selector":selector,"name":clean_text(item.get("name", ""),80,"Element name",False),"text":clean_text(item.get("text", ""),500,"Element text",False),"textAm":clean_text(item.get("textAm", ""),500,"Element Amharic text",False),"visibility":requested_visibility,"background":element_color(item.get("background")),"color":element_color(item.get("color")),"fontSize":font_size,"radius":element_radius,"padding":element_padding})
-    clean = {"appearance":appearance,"labels":labels,"content":content,"visibility":visibility,"elements":elements,"layout":{"order":layout_order},"defaults":{"financePeriod":default_period,"productSort":default_sort}}
+    clean = {"appearance":appearance,"labels":labels,"content":content,"visibility":visibility,"elements":elements,"layout":{"order":layout_order}}
     try:
         existing = supabase_request("GET", "/rest/v1/ambar_interface_settings", params={"select":"settings,version_history", "id":"eq.1", "limit":"1"}) or []
         old = existing[0] if existing else {}
@@ -4320,11 +4154,11 @@ def health():
 def authenticated_telegram_user():
     load_product_catalog()
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    valid, user_id = validate_telegram_init_data(init_data) if init_data else (False, None)
+    valid, user_id = validate_telegram_init_data(init_data)
     if not valid or not user_id:
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_or_missing_telegram_auth"})
-        return jsonify(authenticated=False, error="Customer sign-in could not be started. Please refresh the page.", error_code="customer_session_unavailable"), 401
+        return jsonify(authenticated=False, error="Telegram authentication failed. Open the Mini App from the AMBAR Telegram bot."), 401
     try:
         pairs = dict(parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
         user = json.loads(pairs.get("user", "{}"))
@@ -4333,7 +4167,7 @@ def authenticated_telegram_user():
     except (ValueError, TypeError, json.JSONDecodeError):
         write_security_event("failed_customer_auth", path=request.path, method=request.method,
                              status_code=401, details={"reason": "invalid_signed_profile_data"})
-        return jsonify(authenticated=False, error="Telegram profile data is invalid.", error_code="telegram_profile_payload_invalid"), 401
+        return jsonify(authenticated=False, error="Telegram profile data is invalid."), 401
     # Profile fields are read from Telegram's signed initData only after HMAC verification.
     safe_user = {
         "id": user_id,
@@ -4343,30 +4177,6 @@ def authenticated_telegram_user():
         "language_code": clean_text(user.get("language_code", ""), 20, "Language"),
         "photo_url": clean_text(user.get("photo_url", ""), 2000, "Profile photo URL"),
     }
-    # Reconnect the verified Telegram identity to its existing AMBAR customer
-    # profile. Never match by name or accept a customer ID from the browser.
-    saved_customer_profile = None
-    if supabase_enabled():
-        try:
-            profile_rows = supabase_request("GET", "/rest/v1/customer_profiles", params={
-                "select": "customer_id,full_name,phone,location,telegram_user_id,telegram_username,customer_type,customer_status",
-                "telegram_user_id": f"eq.{user_id}", "limit": "2"
-            }) or []
-            if len(profile_rows) == 1:
-                row = profile_rows[0]
-                saved_customer_profile = {
-                    "customer_id": clean_text(row.get("customer_id", ""), 80, "Customer ID"),
-                    "full_name": clean_text(row.get("full_name", ""), 100, "Customer name"),
-                    "phone": clean_text(row.get("phone", ""), 50, "Customer phone"),
-                    "location": clean_text(row.get("location", ""), 500, "Customer location"),
-                    "telegram_username": clean_text(row.get("telegram_username", ""), 100, "Telegram username"),
-                    "customer_type": clean_text(row.get("customer_type", ""), 40, "Customer type"),
-                    "customer_status": clean_text(row.get("customer_status", ""), 40, "Customer status"),
-                }
-            elif len(profile_rows) > 1:
-                log.error("Multiple customer profiles are linked to verified Telegram ID %s; profile autofill skipped", user_id)
-        except Exception:
-            log.exception("Could not load saved customer profile for verified Telegram ID %s", user_id)
     # Show the admin entry point to the owner and any active staff account saved
     # in Supabase. Staff do not need to be added to the Render allowlist.
     is_owner = is_main_admin_user(user_id)
@@ -4384,7 +4194,7 @@ def authenticated_telegram_user():
     has_main_admin_access = bool(is_admin and (is_owner or "*" in effective_permissions or non_workshop_permissions))
     has_workshop_access = bool(is_admin and (is_owner or "*" in effective_permissions or "workshop_erp" in effective_permissions))
     workshop_only_role = bool(has_workshop_access and not has_main_admin_access)
-    return jsonify(authenticated=True, user=safe_user, customer_profile=saved_customer_profile, is_admin=is_admin,
+    return jsonify(authenticated=True, user=safe_user, is_admin=is_admin,
                    admin_permissions=permissions if is_admin else [],
                    has_main_admin_access=has_main_admin_access,
                    has_workshop_access=has_workshop_access,
@@ -5373,21 +5183,6 @@ def start_telegram_polling():
         telegram_app.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
         async def runner():
             await telegram_app.initialize()
-            # Fail closed if Render accidentally has the production/old bot token.
-            me = await telegram_app.bot.get_me()
-            actual_username = str(me.username or "").lstrip("@")
-            if actual_username.casefold() != BOT_PUBLIC_USERNAME.casefold():
-                raise RuntimeError(
-                    f"Wrong Telegram bot token on this V2 service: expected @{BOT_PUBLIC_USERNAME}, "
-                    f"but BOT_TOKEN belongs to @{actual_username or 'unknown'}. Update only the V2 Render BOT_TOKEN."
-                )
-            await telegram_app.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(
-                    text="Open AMBAR",
-                    web_app=WebAppInfo(url=WEBAPP_URL)
-                )
-            )
-            log.info("Verified new Telegram bot @%s and configured its Mini App menu button", actual_username)
             if telegram_app.job_queue is not None:
                 try:
                     notification_tz = ZoneInfo(NOTIFICATION_TIMEZONE)
@@ -5489,33 +5284,9 @@ def auto_confirm_orders_loop():
         time.sleep(AUTO_CONFIRM_POLL_SECONDS)
 
 
-def validate_v2_deployment_environment():
-    """Fail closed unless this service is configured for the dedicated V2 bot and database."""
-    if not BOT_TOKEN:
-        raise RuntimeError("V2 startup blocked: set BOT_TOKEN or AMBAR_V2_BOT_TOKEN to the token for @AMBAR_SALESBOT.")
-    if BOT_PUBLIC_USERNAME.casefold() != "ambar_salesbot":
-        raise RuntimeError("V2 startup blocked: BOT_PUBLIC_USERNAME must be AMBAR_SALESBOT.")
-    if not WEBAPP_URL.startswith("https://"):
-        raise RuntimeError("V2 startup blocked: WEBAPP_URL must be the HTTPS V2 Render URL.")
-    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
-        raise RuntimeError("V2 startup blocked: set AMBAR_V2_SUPABASE_URL and AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY for the separate V2 Supabase project.")
-    if not SUPABASE_URL.startswith("https://") or ".supabase.co" not in SUPABASE_URL:
-        raise RuntimeError("V2 startup blocked: AMBAR_V2_SUPABASE_URL must be the HTTPS URL of the dedicated V2 Supabase project.")
-    try:
-        response = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=12)
-        payload = response.json()
-    except Exception as exc:
-        raise RuntimeError(f"V2 startup blocked: Telegram bot identity check failed ({type(exc).__name__}).") from exc
-    actual = str((payload.get("result") or {}).get("username") or "").lstrip("@") if payload.get("ok") else ""
-    if actual.casefold() != "ambar_salesbot":
-        raise RuntimeError(f"V2 startup blocked: BOT_TOKEN belongs to @{actual or 'unknown'}, not @AMBAR_SALESBOT. The old production bot will not be started by this service.")
-    log.info("V2 deployment preflight passed: Telegram bot=@%s; V2 Supabase project URL configured; Telegram-only access enabled.", actual)
-
-
 def main():
     global telegram_thread_started, _auto_confirm_thread_started
-    validate_v2_deployment_environment()
-    if not telegram_thread_started:
+    if BOT_TOKEN and not telegram_thread_started:
         thread = threading.Thread(target=start_telegram_polling, name="telegram-polling", daemon=True)
         thread.start()
         telegram_thread_started = True
