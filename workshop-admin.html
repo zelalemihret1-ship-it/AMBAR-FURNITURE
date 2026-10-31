@@ -5,7 +5,76 @@
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#111416;color:#f4f5f3;font-family:Inter,Segoe UI,Arial,sans-serif;overscroll-behavior:none}body{touch-action:pan-x pan-y}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #303a3c;background:#151b1d;position:sticky;top:0;z-index:5}.brand{font-weight:900;letter-spacing:.5px}.brand span{color:#f39a38}.sub{font-size:12px;color:#a8b2b0;margin-top:4px}.btn{border:1px solid #3c494a;background:#20282a;color:#fff;border-radius:10px;padding:10px 13px;font-weight:700;cursor:pointer}.main{padding:14px;max-width:1800px;margin:auto}#status{padding:18px;border:1px solid #303a3c;border-radius:14px;background:#191f21;line-height:1.6}#erpFrame{display:none;width:100%;height:calc(100dvh - 84px);min-height:600px;border:1px solid #303a3c;border-radius:14px;background:#101416}#denied{display:none;color:#ffb7ad} @media(max-width:600px){.top{padding:12px}.main{padding:8px}#erpFrame{height:calc(100dvh - 75px);min-height:520px}}
 @media print{body{display:none!important}}
 .finance-launch{display:none;background:linear-gradient(135deg,#f3d9a4,#c79a58);color:#17130c;font-weight:900;border:1px solid #f3d9a4;border-radius:12px;padding:10px 14px;box-shadow:0 5px 20px #0005}.finance-modal{display:none;position:fixed;inset:0;z-index:50;background:#000b;padding:10px}.finance-modal.open{display:block}.finance-modal-box{height:100%;width:100%;max-width:1500px;margin:auto;background:#111214;border:1px solid #d8b47770;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}.finance-modal-head{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #d8b47735;color:#f5eee2}.finance-modal iframe{border:0;width:100%;height:100%;background:#111214}@media(max-width:600px){.finance-modal{padding:0}.finance-modal-box{border-radius:0}}
-</style></head><body>
+</style>
+<style id="ambar-premium-iphone-system">
+:root{
+ --ambar-orange:#f47732;--ambar-orange-deep:#e96120;--ambar-ink:#202124;
+ --ambar-muted:#7b8088;--ambar-canvas:#f5f5f7;--ambar-surface:#fff;
+ --ambar-stroke:rgba(35,38,42,.09);--ambar-shadow:0 8px 26px rgba(25,28,32,.075);
+ --ambar-radius:22px;--ambar-safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{background:var(--ambar-canvas);color:var(--ambar-ink);-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Inter,system-ui,sans-serif;letter-spacing:-.012em}
+button,.btn,[role=button],input,select,textarea{font-family:inherit}
+button,.btn,[role=button]{
+ -webkit-appearance:none;appearance:none;min-height:44px;border:0;border-radius:15px;
+ font-weight:650;letter-spacing:-.015em;transition:transform .16s ease,background .18s ease,box-shadow .18s ease,opacity .18s ease;
+ touch-action:manipulation;outline:none
+}
+button:active,.btn:active,[role=button]:active{transform:scale(.965);filter:brightness(.97)}
+button:focus-visible,.btn:focus-visible,[role=button]:focus-visible{outline:3px solid rgba(244,119,50,.28);outline-offset:2px}
+button:disabled,.btn:disabled{opacity:.42;transform:none;cursor:not-allowed}
+.btn,button.btn{
+ display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:13px 19px;
+ background:linear-gradient(180deg,#ff914f 0%,var(--ambar-orange) 100%);color:#fff!important;
+ box-shadow:0 5px 13px rgba(244,119,50,.22);font-size:14px;font-weight:750
+}
+.btn.secondary,button.secondary,.btn.tertiary{
+ background:#fff;color:#282a2e!important;border:1px solid var(--ambar-stroke);
+ box-shadow:0 2px 7px rgba(20,22,25,.045)
+}
+input:not([type=checkbox]):not([type=radio]),select,textarea{
+ min-height:46px;border-radius:15px;border:1px solid rgba(35,38,42,.11);
+ background:#fff;color:#24262a;padding:12px 14px;box-shadow:inset 0 1px 2px rgba(20,22,25,.025);
+ outline:none;transition:border-color .18s,box-shadow .18s
+}
+input:focus,select:focus,textarea:focus{border-color:rgba(244,119,50,.75)!important;box-shadow:0 0 0 4px rgba(244,119,50,.12)!important}
+header,#appHeader{background:rgba(255,255,255,.91)!important;color:#202124!important;border-bottom:1px solid rgba(30,32,35,.07)!important;box-shadow:0 5px 20px rgba(25,28,32,.045)!important;backdrop-filter:blur(22px) saturate(180%)!important;-webkit-backdrop-filter:blur(22px) saturate(180%)!important}
+.brand-copy h1{letter-spacing:-.045em;font-weight:850}
+.brand-copy .sub{color:#858991}
+.btn.secondary,.tab,.icon-btn,.screen-back,.favorite-btn,.service-main,.top-favorites-btn,.top-cart-btn,.user-profile{
+ transition:transform .16s ease,background .18s ease,box-shadow .18s ease
+}
+.tab{background:#fff!important;border:1px solid var(--ambar-stroke)!important;border-radius:999px!important;padding:10px 16px!important;color:#565b63!important;font-weight:650!important}
+.tab.active{background:var(--ambar-orange)!important;border-color:var(--ambar-orange)!important;color:white!important;box-shadow:0 5px 14px rgba(244,119,50,.2)}
+.ambar-search-bar{border-radius:17px!important;background:#fff!important;border:1px solid var(--ambar-stroke)!important;box-shadow:0 3px 12px rgba(25,28,32,.035)!important}
+.product-card,.product-item,.auth-card,.modal-card,.panel,.stat-card,.admin-card,.order-card{
+ border-radius:22px!important;box-shadow:var(--ambar-shadow)!important;border-color:var(--ambar-stroke)!important
+}
+.product-open{border-radius:15px!important}
+.favorite-btn,.icon-btn,.screen-back,.service-main,.top-favorites-btn,.top-cart-btn,.user-profile{
+ width:44px;min-width:44px;height:44px;min-height:44px;border-radius:15px!important;
+ display:inline-flex;align-items:center;justify-content:center;background:#fff!important;
+ border:1px solid var(--ambar-stroke)!important;box-shadow:0 2px 8px rgba(20,22,25,.05)
+}
+.favorite-btn.is-favorite{background:#fff0e8!important;color:var(--ambar-orange)!important}
+.auth-gate{background:rgba(20,22,26,.46)!important;backdrop-filter:blur(12px)}
+.auth-card{background:#fff!important;padding:26px!important}
+a{color:var(--ambar-orange-deep)}
+@media(max-width:640px){
+ .wrap{padding-left:16px!important;padding-right:16px!important;padding-bottom:calc(96px + var(--ambar-safe-bottom))!important}
+ header,#appHeader{margin-left:-16px!important;margin-right:-16px!important;padding:11px 16px!important;gap:9px!important}
+ .brand-logo{width:43px!important;height:43px!important;flex-basis:43px!important;border-radius:13px!important}
+ .brand-copy h1{font-size:17px!important}
+ .brand-copy .sub{font-size:10px!important}
+ .btn,button.btn{min-height:48px;padding:13px 17px}
+ .product-card,.product-item{border-radius:20px!important}
+ .auth-card{margin:16px!important}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+
+</head><body>
 <header class="top"><div><div class="brand">AMBAR <span>WORKSHOP ERP</span></div><div class="sub">Separate authorized workspace</div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="finance-launch" id="financeLaunchBtn" type="button">▣ Financial &amp; Inventory Dashboard</button><button class="btn" id="customerInfoBtn" type="button">♙ Customer Information</button><button class="btn" id="backBtn" type="button">← Back to Profile</button></div></header>
 <div class="finance-modal" id="financeModal" role="dialog" aria-modal="true" aria-label="Financial and Inventory Dashboard"><div class="finance-modal-box"><div class="finance-modal-head"><strong>AMBAR · Financial &amp; Inventory Dashboard</strong><button class="btn" id="financeCloseBtn" type="button">✕ Close</button></div><iframe id="financeFrame" title="Financial &amp; Inventory Dashboard"></iframe></div></div>
 <main class="main"><div id="status" role="status">Verifying your AMBAR administrator access…<p id="denied"></p></div><iframe id="erpFrame" title="AMBAR Workshop ERP" sandbox="allow-scripts allow-forms allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox"></iframe></main>
