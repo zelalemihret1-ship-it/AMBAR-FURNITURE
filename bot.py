@@ -45,7 +45,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Accept the dedicated V2 variable as well as the conventional BOT_TOKEN.
 # Both names may be set to the same @AMBAR_SALESBOT token in Render.
-BOT_TOKEN = (os.getenv("BOT_TOKEN") or os.getenv("AMBAR_V2_BOT_TOKEN") or "").strip()
+BOT_TOKEN = (os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("AMBAR_V2_BOT_TOKEN") or "").strip()
 SERVICE_CHAT_ID = os.getenv("SERVICE_CHAT_ID", "").strip()
 WORKERS_TELEGRAM_CHAT_ID = os.getenv("WORKERS_TELEGRAM_CHAT_ID", "").strip()
 AMBAR_LOCATION_URL = "https://maps.app.goo.gl/fxCmYYKzLtYae5GeA"
@@ -682,9 +682,10 @@ def clean_text(value, limit, field, required=False):
 def validate_telegram_init_data(init_data):
     """Verify Telegram Mini App initData using the bot-token HMAC scheme.
 
-    Telegram may include a separate Ed25519 ``signature`` parameter for
-    third-party verification. It is not part of the bot-token HMAC data-check
-    string; only the signed fields (excluding hash/signature) are included.
+    Telegram's bot-token HMAC data-check string includes every received field
+    except ``hash``. In particular, keep the optional ``signature`` field in
+    this check. Telegram's separate third-party Ed25519 check excludes both
+    ``hash`` and ``signature``; that is a different validation procedure.
     """
     if not BOT_TOKEN:
         log.error("Telegram Mini App auth unavailable: BOT_TOKEN is not configured on this V2 service")
@@ -700,9 +701,8 @@ def validate_telegram_init_data(init_data):
             return False, None
         pairs = dict(parsed)
         received_hash = pairs.pop("hash", None)
-        # Telegram may attach a separate Ed25519 signature. Bot-token HMAC
-        # verification uses the hash field and excludes the signature field.
-        pairs.pop("signature", None)
+        # Keep all fields other than hash in the bot-token HMAC check string.
+        # This includes Telegram's optional Ed25519 ``signature`` field.
         if not received_hash or not re.fullmatch(r"[0-9a-fA-F]{64}", received_hash):
             log.warning("Telegram Mini App auth rejected: missing or malformed hash")
             return False, None
