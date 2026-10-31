@@ -69,12 +69,24 @@ WORKSHOP_STAFF_SESSIONS = {}
 ADMIN_PASSWORD_ATTEMPTS = {}
 ADMIN_PASSWORD_LOCK = threading.Lock()
 MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
-SUPABASE_URL = os.getenv("AMBAR_V2_SUPABASE_URL", "").strip().rstrip("/")
-# Prefer the legacy service_role JWT for server-to-server Authorization. Some
-# projects also provide a newer sb_secret_* API key; keep it as the apikey when
-# configured, while the service-role JWT remains the Authorization credential.
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY", "").strip()
-SUPABASE_SECRET_KEY = os.getenv("AMBAR_V2_SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
+# Read only V2-specific names. These aliases help when Render variables were
+# entered with either documented V2 naming convention; deliberately do NOT read
+# generic SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY, which could point at production.
+SUPABASE_URL = (
+    os.getenv("AMBAR_V2_SUPABASE_URL", "").strip()
+    or os.getenv("V2_SUPABASE_URL", "").strip()
+).rstrip("/")
+# Supabase server-side credentials only. A publishable key (sb_publishable_...)
+# is not accepted as a server credential.
+SUPABASE_SERVICE_ROLE_KEY = (
+    os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    or os.getenv("V2_SUPABASE_SERVICE_ROLE_KEY", "").strip()
+)
+SUPABASE_SECRET_KEY = (
+    os.getenv("AMBAR_V2_SUPABASE_SECRET_KEY", "").strip()
+    or os.getenv("V2_SUPABASE_SECRET_KEY", "").strip()
+    or SUPABASE_SERVICE_ROLE_KEY
+)
 SUPABASE_AUTHORIZATION_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
 SUPABASE_PRODUCTS_TABLE = os.getenv("SUPABASE_PRODUCTS_TABLE", "products").strip() or "products"
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "product-images").strip() or "product-images"
@@ -5468,9 +5480,24 @@ def validate_v2_deployment_environment():
     if not WEBAPP_URL.startswith("https://"):
         raise RuntimeError("V2 startup blocked: WEBAPP_URL must be the HTTPS V2 Render URL.")
     if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
-        raise RuntimeError("V2 startup blocked: set AMBAR_V2_SUPABASE_URL and AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY for the separate V2 Supabase project.")
+        # Log presence only; never expose a key or full project URL in logs.
+        log.error(
+            "V2 Supabase environment not visible to this Render process: "
+            "url_present=%s service_role_present=%s secret_key_present=%s. "
+            "Expected AMBAR_V2_SUPABASE_URL plus AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY "
+            "(or the V2_SUPABASE_* aliases).",
+            bool(SUPABASE_URL), bool(SUPABASE_SERVICE_ROLE_KEY),
+            bool(os.getenv("AMBAR_V2_SUPABASE_SECRET_KEY", "").strip() or os.getenv("V2_SUPABASE_SECRET_KEY", "").strip()),
+        )
+        raise RuntimeError(
+            "V2 startup blocked: this Render service cannot see both V2 Supabase settings. "
+            "Add AMBAR_V2_SUPABASE_URL and AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY to THIS service's Environment page, "
+            "or use V2_SUPABASE_URL and V2_SUPABASE_SERVICE_ROLE_KEY. Do not use the Publishable key."
+        )
     if not SUPABASE_URL.startswith("https://") or ".supabase.co" not in SUPABASE_URL:
         raise RuntimeError("V2 startup blocked: AMBAR_V2_SUPABASE_URL must be the HTTPS URL of the dedicated V2 Supabase project.")
+    if SUPABASE_SECRET_KEY.startswith("sb_publishable_"):
+        raise RuntimeError("V2 startup blocked: the Supabase Publishable key cannot be used by the backend. Use the server-side Secret key (sb_secret_...) or legacy service_role key for the V2 project.")
     try:
         response = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=12)
         payload = response.json()
