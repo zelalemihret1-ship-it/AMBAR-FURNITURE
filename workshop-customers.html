@@ -2,7 +2,76 @@
 <html lang="en"><head><meta charset="utf-8"><script src="https://telegram.org/js/telegram-web-app.js"></script><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>AMBAR Workshop ERP · Customer Information</title>
 <style>
 :root{color-scheme:dark;--bg:#101113;--panel:#1a1b1e;--line:#ffffff20;--text:#f6f4f0;--muted:#b8b5ae;--accent:#ff842b;--gold:#d7b477}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#382314 0,transparent 38%),var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:1150px;margin:auto;padding:20px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}.brand{font-weight:900;letter-spacing:.12em}.brand small{display:block;color:var(--gold);font-size:10px;letter-spacing:.18em}.actions{display:flex;gap:8px;flex-wrap:wrap}button{border:1px solid var(--line);border-radius:11px;padding:10px 14px;background:#ffffff0a;color:var(--text);font-weight:750;cursor:pointer}button.primary{background:linear-gradient(135deg,#ff9b49,#e36b1b);border-color:#ffb06d;color:#20150e}button:disabled{opacity:.55;cursor:not-allowed}.panel{border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,#ffffff0c,#ffffff04);box-shadow:0 16px 40px #0004;padding:18px;margin:14px 0;backdrop-filter:blur(18px)}h1{font-size:clamp(24px,4vw,34px);margin:3px 0 8px}h2{font-size:18px;margin:0 0 12px}.muted{color:var(--muted)}.notice{padding:11px 13px;border:1px solid var(--line);border-radius:11px;margin:12px 0;color:var(--muted);overflow-wrap:anywhere}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.metric{padding:14px;border:1px solid var(--line);border-radius:13px;background:#0002}.metric span{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;font-size:21px;margin-top:4px}label{display:block;font-size:12px;font-weight:750;color:#e6e0d5;margin:7px 0 5px}input,select,textarea{width:100%;min-height:42px;border:1px solid #ffffff24;border-radius:10px;background:#111214;color:var(--text);padding:10px;font:inherit}textarea{min-height:72px;resize:vertical}.field{min-width:0}.item{padding:14px;border:1px solid var(--line);border-radius:14px;background:#0002;margin:10px 0}.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.tag{display:inline-block;border:1px solid #d7b47755;color:#f1d5a2;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:800}.history{margin-top:10px;padding:10px;border-radius:10px;background:#ffffff07}.history-row{padding:8px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.history-row:last-child{border:0}.empty{padding:18px;text-align:center;color:var(--muted)}@media(max-width:650px){.wrap{padding:12px}.panel{padding:13px}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.metric strong{font-size:18px}}
-</style></head><body><main class="wrap"><header class="top"><div class="brand">AMBAR <small>WORKSHOP ERP · CUSTOMER INFORMATION</small></div><div class="actions"><button id="back">← Back to Workshop ERP</button><button id="refresh" class="primary">↻ Refresh customer & sales</button><button id="downloadPdf">⇩ Download PDF</button><button id="downloadExcel">⇩ Download Excel</button><button id="sendTelegram">➤ Send PDF to Telegram</button><button id="sendExcelTelegram">➤ Send Excel to Telegram</button></div></header>
+</style>
+<style id="ambar-premium-iphone-system">
+:root{
+ --ambar-orange:#f47732;--ambar-orange-deep:#e96120;--ambar-ink:#202124;
+ --ambar-muted:#7b8088;--ambar-canvas:#f5f5f7;--ambar-surface:#fff;
+ --ambar-stroke:rgba(35,38,42,.09);--ambar-shadow:0 8px 26px rgba(25,28,32,.075);
+ --ambar-radius:22px;--ambar-safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{background:var(--ambar-canvas);color:var(--ambar-ink);-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Inter,system-ui,sans-serif;letter-spacing:-.012em}
+button,.btn,[role=button],input,select,textarea{font-family:inherit}
+button,.btn,[role=button]{
+ -webkit-appearance:none;appearance:none;min-height:44px;border:0;border-radius:15px;
+ font-weight:650;letter-spacing:-.015em;transition:transform .16s ease,background .18s ease,box-shadow .18s ease,opacity .18s ease;
+ touch-action:manipulation;outline:none
+}
+button:active,.btn:active,[role=button]:active{transform:scale(.965);filter:brightness(.97)}
+button:focus-visible,.btn:focus-visible,[role=button]:focus-visible{outline:3px solid rgba(244,119,50,.28);outline-offset:2px}
+button:disabled,.btn:disabled{opacity:.42;transform:none;cursor:not-allowed}
+.btn,button.btn{
+ display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:13px 19px;
+ background:linear-gradient(180deg,#ff914f 0%,var(--ambar-orange) 100%);color:#fff!important;
+ box-shadow:0 5px 13px rgba(244,119,50,.22);font-size:14px;font-weight:750
+}
+.btn.secondary,button.secondary,.btn.tertiary{
+ background:#fff;color:#282a2e!important;border:1px solid var(--ambar-stroke);
+ box-shadow:0 2px 7px rgba(20,22,25,.045)
+}
+input:not([type=checkbox]):not([type=radio]),select,textarea{
+ min-height:46px;border-radius:15px;border:1px solid rgba(35,38,42,.11);
+ background:#fff;color:#24262a;padding:12px 14px;box-shadow:inset 0 1px 2px rgba(20,22,25,.025);
+ outline:none;transition:border-color .18s,box-shadow .18s
+}
+input:focus,select:focus,textarea:focus{border-color:rgba(244,119,50,.75)!important;box-shadow:0 0 0 4px rgba(244,119,50,.12)!important}
+header,#appHeader{background:rgba(255,255,255,.91)!important;color:#202124!important;border-bottom:1px solid rgba(30,32,35,.07)!important;box-shadow:0 5px 20px rgba(25,28,32,.045)!important;backdrop-filter:blur(22px) saturate(180%)!important;-webkit-backdrop-filter:blur(22px) saturate(180%)!important}
+.brand-copy h1{letter-spacing:-.045em;font-weight:850}
+.brand-copy .sub{color:#858991}
+.btn.secondary,.tab,.icon-btn,.screen-back,.favorite-btn,.service-main,.top-favorites-btn,.top-cart-btn,.user-profile{
+ transition:transform .16s ease,background .18s ease,box-shadow .18s ease
+}
+.tab{background:#fff!important;border:1px solid var(--ambar-stroke)!important;border-radius:999px!important;padding:10px 16px!important;color:#565b63!important;font-weight:650!important}
+.tab.active{background:var(--ambar-orange)!important;border-color:var(--ambar-orange)!important;color:white!important;box-shadow:0 5px 14px rgba(244,119,50,.2)}
+.ambar-search-bar{border-radius:17px!important;background:#fff!important;border:1px solid var(--ambar-stroke)!important;box-shadow:0 3px 12px rgba(25,28,32,.035)!important}
+.product-card,.product-item,.auth-card,.modal-card,.panel,.stat-card,.admin-card,.order-card{
+ border-radius:22px!important;box-shadow:var(--ambar-shadow)!important;border-color:var(--ambar-stroke)!important
+}
+.product-open{border-radius:15px!important}
+.favorite-btn,.icon-btn,.screen-back,.service-main,.top-favorites-btn,.top-cart-btn,.user-profile{
+ width:44px;min-width:44px;height:44px;min-height:44px;border-radius:15px!important;
+ display:inline-flex;align-items:center;justify-content:center;background:#fff!important;
+ border:1px solid var(--ambar-stroke)!important;box-shadow:0 2px 8px rgba(20,22,25,.05)
+}
+.favorite-btn.is-favorite{background:#fff0e8!important;color:var(--ambar-orange)!important}
+.auth-gate{background:rgba(20,22,26,.46)!important;backdrop-filter:blur(12px)}
+.auth-card{background:#fff!important;padding:26px!important}
+a{color:var(--ambar-orange-deep)}
+@media(max-width:640px){
+ .wrap{padding-left:16px!important;padding-right:16px!important;padding-bottom:calc(96px + var(--ambar-safe-bottom))!important}
+ header,#appHeader{margin-left:-16px!important;margin-right:-16px!important;padding:11px 16px!important;gap:9px!important}
+ .brand-logo{width:43px!important;height:43px!important;flex-basis:43px!important;border-radius:13px!important}
+ .brand-copy h1{font-size:17px!important}
+ .brand-copy .sub{font-size:10px!important}
+ .btn,button.btn{min-height:48px;padding:13px 17px}
+ .product-card,.product-item{border-radius:20px!important}
+ .auth-card{margin:16px!important}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+
+</head><body><main class="wrap"><header class="top"><div class="brand">AMBAR <small>WORKSHOP ERP · CUSTOMER INFORMATION</small></div><div class="actions"><button id="back">← Back to Workshop ERP</button><button id="refresh" class="primary">↻ Refresh customer & sales</button><button id="downloadPdf">⇩ Download PDF</button><button id="downloadExcel">⇩ Download Excel</button><button id="sendTelegram">➤ Send PDF to Telegram</button><button id="sendExcelTelegram">➤ Send Excel to Telegram</button></div></header>
 <section class="panel"><h1>Customer Information</h1><p class="muted">A dedicated Workshop ERP workspace for customer profiles, purchase history, sales totals, delivery and after-sales service. Customer records are saved in Supabase and use permanent unique Customer IDs.</p><div id="notice" class="notice">Checking your protected Workshop ERP session…</div><div id="metrics" class="metrics"></div></section>
 <section class="panel"><h2>Register or edit customer</h2><p class="muted">Customer ID is generated by the database when a new profile is saved. Existing customer IDs stay unchanged when you edit a profile.</p><form id="profileForm"><input id="customerId" type="hidden"><div class="grid"><div class="field"><label for="name">Full name *</label><input id="name" maxlength="200" required></div><div class="field"><label for="sex">Sex</label><select id="sex"><option value="">Prefer not to say</option><option>Female</option><option>Male</option><option>Other</option></select></div><div class="field"><label for="phone">Phone number *</label><input id="phone" maxlength="50" required></div><div class="field"><label for="phone2">Secondary phone</label><input id="phone2" maxlength="50"></div><div class="field"><label for="location">Location / address</label><input id="location" maxlength="500"></div><div class="field"><label for="telegramId">Telegram user ID</label><input id="telegramId" maxlength="80"></div><div class="field"><label for="telegramName">Telegram username</label><input id="telegramName" maxlength="100"></div><div class="field"><label for="type">Customer type</label><select id="type"><option>Individual</option><option>Company</option><option>Other</option></select></div><div class="field"><label for="status">Customer status</label><select id="status"><option>Active</option><option>Inactive</option><option>Archived</option></select></div><div class="field"><label for="measurements">Measurements / preferences</label><textarea id="measurements" maxlength="3000"></textarea></div><div class="field"><label for="serviceNotes">Service / warranty / delivery notes</label><textarea id="serviceNotes" maxlength="3000"></textarea></div></div><div class="actions" style="margin-top:14px"><button class="primary" type="submit">Save customer profile</button><button type="button" id="clear">Clear form</button></div></form></section>
 <section class="panel"><div class="item-head"><div><h2>Customer profiles & linked sales</h2><p class="muted">Order totals below are calculated from saved customer orders matched by Customer ID, Telegram ID, or phone.</p></div></div><label for="search">Search by Customer ID, name, phone or location</label><input id="search" type="search" placeholder="e.g. AMBC-000001 or customer phone"><div id="list"><div class="empty">Loading customer profiles…</div></div><div class="notice">PDF and Excel exports include editable profile fields and linked sales history. Telegram sending requires the recipient to have started the AMBAR bot.</div></section></main>
