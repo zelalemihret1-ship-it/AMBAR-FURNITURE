@@ -1,6 +1,7 @@
-Flask>=3.0,<4.0
-requests>=2.31,<3.0
-python-telegram-bot>=20.7,<23.0
-python-dotenv>=1.0,<2.0
-Pillow>=10.0,<13.0
-gunicorn>=21.2,<24.0
+Flask>=3.0,<4
+requests>=2.31,<3
+python-telegram-bot>=21,<23
+python-dotenv>=1.0,<2
+Pillow>=10,<13
+reportlab>=4.0,<5
+gunicorn>=22,<24
