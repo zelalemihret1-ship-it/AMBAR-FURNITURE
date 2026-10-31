@@ -39,8 +39,8 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/tmp/ambar_custom_uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-BOT_TOKEN = (os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-SERVICE_CHAT_ID = (os.getenv("SERVICE_CHAT_ID") or os.getenv("SERVICE_CHAT_ID", "")).strip()
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+SERVICE_CHAT_ID = os.getenv("SERVICE_CHAT_ID", "").strip()
 WORKERS_TELEGRAM_CHAT_ID = os.getenv("WORKERS_TELEGRAM_CHAT_ID", "").strip()
 AMBAR_LOCATION_URL = "https://maps.app.goo.gl/fxCmYYKzLtYae5GeA"
 CHAPA_SECRET_KEY = os.getenv("CHAPA_SECRET_KEY", "").strip()
@@ -48,7 +48,7 @@ CHAPA_WEBHOOK_SECRET = os.getenv("CHAPA_WEBHOOK_SECRET", "").strip()
 CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip().rstrip("/")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-miniapp.onrender.com/").strip()
 BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "ambar_salesbot").strip().lstrip("@")
-TELEGRAM_CHANNEL_INVITE_URL = os.getenv("TELEGRAM_CHANNEL_INVITE_URL", "https://t.me/+YO20OQ1F1VIyMWZk").strip()
+CHANNEL_INVITE_URL = os.getenv("CHANNEL_INVITE_URL", "https://t.me/+YO20OQ1F1VIyMWZk").strip()
 REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "true").strip().lower() in {"1", "true", "yes", "on"}
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
 
@@ -63,17 +63,17 @@ PRODUCT_IMAGE_DIR = Path(os.getenv("PRODUCT_IMAGE_DIR", str(BASE_DIR / "products
 PRODUCT_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 ADMIN_TELEGRAM_IDS = {x.strip() for x in os.getenv("ADMIN_TELEGRAM_IDS", "").split(",") if x.strip()}
 ADMIN_PASSWORD_MANAGER_TELEGRAM_ID = os.getenv("ADMIN_PASSWORD_MANAGER_TELEGRAM_ID", "").strip()
-ADMIN_EMERGENCY_PASSWORD = os.getenv("ADMIN_EMERGENCY_PASSWORD") or os.getenv("ADMIN_EMERGENCY_PAS") or ""
+ADMIN_EMERGENCY_PASSWORD = os.getenv("ADMIN_EMERGENCY_PASSWORD", "")
 ADMIN_EMERGENCY_SESSIONS = {}
 WORKSHOP_STAFF_SESSIONS = {}
 ADMIN_PASSWORD_ATTEMPTS = {}
 ADMIN_PASSWORD_LOCK = threading.Lock()
 MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
-SUPABASE_URL = (os.getenv("SUPABASE_URL") or os.getenv("AMBAR_V2_SUPABASE_URL") or "").strip().rstrip("/")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 # Prefer the legacy service_role JWT for server-to-server Authorization. Some
 # projects also provide a newer sb_secret_* API key; keep it as the apikey when
 # configured, while the service-role JWT remains the Authorization credential.
-SUPABASE_SERVICE_ROLE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SERVICE_ROLE_KEY") or "").strip()
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_AUTHORIZATION_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
 SUPABASE_PRODUCTS_TABLE = os.getenv("SUPABASE_PRODUCTS_TABLE", "products").strip() or "products"
