@@ -38,15 +38,13 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/tmp/ambar_custom_uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Accept the environment-variable names configured in Render, while preserving
-# compatibility with earlier deployments. Never print these values to logs.
 BOT_TOKEN = (os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("AMBAR_V2_BOT_TOKEN") or "").strip()
-SERVICE_CHAT_ID = os.getenv("SERVICE_CHAT_ID", "").strip()
+SERVICE_CHAT_ID = (os.getenv("SERVICE_CHAT_ID") or "").strip()
 AMBAR_LOCATION_URL = "https://maps.app.goo.gl/fxCmYYKzLtYae5GeA"
 CHAPA_SECRET_KEY = os.getenv("CHAPA_SECRET_KEY", "").strip()
 CHAPA_WEBHOOK_SECRET = os.getenv("CHAPA_WEBHOOK_SECRET", "").strip()
 CHAPA_API_BASE = os.getenv("CHAPA_API_BASE", "https://api.chapa.global").strip().rstrip("/")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ambar-furniture-miniapp.onrender.com/").strip()
+WEBAPP_URL = (os.getenv("WEBAPP_URL") or "https://ambar-furniture-miniapp.onrender.com/").strip()
 BOT_PUBLIC_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "ambar_sels_bot").strip().lstrip("@")
 REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "true").strip().lower() in {"1", "true", "yes", "on"}
 MAX_CONTENT_LENGTH = 4 * 8 * 1024 * 1024 + 1024 * 1024
@@ -61,8 +59,8 @@ PRODUCT_CATALOG_FILE = Path(os.getenv("PRODUCT_CATALOG_FILE", str(BASE_DIR / "pr
 PRODUCT_IMAGE_DIR = Path(os.getenv("PRODUCT_IMAGE_DIR", str(BASE_DIR / "products")))
 PRODUCT_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 ADMIN_TELEGRAM_IDS = {x.strip() for x in os.getenv("ADMIN_TELEGRAM_IDS", "").split(",") if x.strip()}
-ADMIN_PASSWORD_MANAGER_TELEGRAM_ID = os.getenv("ADMIN_PASSWORD_MANAGER_TELEGRAM_ID", "").strip()
-ADMIN_EMERGENCY_PASSWORD = (os.getenv("ADMIN_EMERGENCY_PAS") or os.getenv("ADMIN_EMERGENCY_PASSWORD") or os.getenv("ADMIN_PASSWORD") or "").strip()
+ADMIN_PASSWORD_MANAGER_TELEGRAM_ID = (os.getenv("ADMIN_PASSWORD_MANAGER_TELEGRAM_ID") or "").strip()
+ADMIN_EMERGENCY_PASSWORD = (os.getenv("ADMIN_EMERGENCY_PASSWORD") or os.getenv("ADMIN_EMERGENCY_PAS") or os.getenv("ADMIN_PASSWORD") or "").strip()
 ADMIN_EMERGENCY_SESSIONS = {}
 WORKSHOP_STAFF_SESSIONS = {}
 ADMIN_PASSWORD_ATTEMPTS = {}
@@ -73,17 +71,15 @@ SUPABASE_URL = (os.getenv("AMBAR_V2_SUPABASE_URL") or os.getenv("SUPABASE_URL") 
 # projects also provide a newer sb_secret_* API key; keep it as the apikey when
 # configured, while the service-role JWT remains the Authorization credential.
 SUPABASE_SERVICE_ROLE_KEY = (os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-SUPABASE_SECRET_KEY = (os.getenv("SUPABASE_SECRET_KEY") or "").strip() or SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_AUTHORIZATION_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-FLASK_ENV = os.getenv("FLASK_ENV", "").strip()
-SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
-# Flask secret is not used as a substitute for Telegram/Supabase credentials.
-app_secret_key = SECRET_KEY or secrets.token_urlsafe(48)
 SUPABASE_PRODUCTS_TABLE = os.getenv("SUPABASE_PRODUCTS_TABLE", "products").strip() or "products"
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "product-images").strip() or "product-images"
+# Optional Render settings retained for compatibility with the supplied environment list.
+SUPABASE_ANON_KEY = (os.getenv("SUPABASE_ANON_KEY") or "").strip()
+DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()  # This backend uses Supabase REST; no direct SQL connection is opened.
+FLASK_ENV = (os.getenv("FLASK_ENV") or "production").strip()
+SECRET_KEY = (os.getenv("SECRET_KEY") or os.getenv("SESSION_SIGNING_SECRET") or SUPABASE_SECRET_KEY or BOT_TOKEN or secrets.token_urlsafe(32)).strip()
 
 
 def supabase_enabled():
@@ -274,6 +270,7 @@ def product_image_upload_from_request(product_id, image, *, updating=False):
     return "/products/" + filename
 
 app = Flask(__name__, static_folder=None)
+app.secret_key = SECRET_KEY
 
 
 def verified_telegram_admin():
@@ -327,7 +324,7 @@ def stored_emergency_password_hash():
 # Stable signing key lets an emergency session be checked by any Render worker.
 # Prefer an explicitly configured secret, then existing server-only credentials.
 def emergency_session_signing_key():
-    value = (os.getenv("SESSION_SIGNING_SECRET", "").strip()
+    value = (os.getenv("SECRET_KEY", "").strip() or os.getenv("SESSION_SIGNING_SECRET", "").strip()
              or SUPABASE_SECRET_KEY or BOT_TOKEN or ADMIN_EMERGENCY_PASSWORD)
     return value.encode("utf-8") if value else None
 
@@ -633,7 +630,6 @@ def audit_authorized_admin_api(response):
 
 
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
-app.config["SECRET_KEY"] = app_secret_key
 telegram_app = None
 telegram_thread_started = False
 
