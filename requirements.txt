@@ -1,7 +1,8 @@
-Flask>=3.0,<4
-requests>=2.31,<3
-python-telegram-bot>=21,<23
-python-dotenv>=1.0,<2
-Pillow>=10,<13
-reportlab>=4.0,<5
-gunicorn>=22,<24
+Flask>=3.0,<4.0
+python-telegram-bot[job-queue]>=21.6,<23.0
+python-dotenv>=1.0,<2.0
+requests>=2.31,<3.0
+gunicorn>=22.0,<24.0
+reportlab>=4.2,<5.0
+
+openpyxl>=3.1,<4.0
