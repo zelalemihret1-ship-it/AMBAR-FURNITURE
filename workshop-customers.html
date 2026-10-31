@@ -2,7 +2,142 @@
 <html lang="en"><head><meta charset="utf-8"><script src="https://telegram.org/js/telegram-web-app.js"></script><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>AMBAR Workshop ERP · Customer Information</title>
 <style>
 :root{color-scheme:dark;--bg:#101113;--panel:#1a1b1e;--line:#ffffff20;--text:#f6f4f0;--muted:#b8b5ae;--accent:#ff842b;--gold:#d7b477}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#382314 0,transparent 38%),var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:1150px;margin:auto;padding:20px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}.brand{font-weight:900;letter-spacing:.12em}.brand small{display:block;color:var(--gold);font-size:10px;letter-spacing:.18em}.actions{display:flex;gap:8px;flex-wrap:wrap}button{border:1px solid var(--line);border-radius:11px;padding:10px 14px;background:#ffffff0a;color:var(--text);font-weight:750;cursor:pointer}button.primary{background:linear-gradient(135deg,#ff9b49,#e36b1b);border-color:#ffb06d;color:#20150e}button:disabled{opacity:.55;cursor:not-allowed}.panel{border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,#ffffff0c,#ffffff04);box-shadow:0 16px 40px #0004;padding:18px;margin:14px 0;backdrop-filter:blur(18px)}h1{font-size:clamp(24px,4vw,34px);margin:3px 0 8px}h2{font-size:18px;margin:0 0 12px}.muted{color:var(--muted)}.notice{padding:11px 13px;border:1px solid var(--line);border-radius:11px;margin:12px 0;color:var(--muted);overflow-wrap:anywhere}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.metric{padding:14px;border:1px solid var(--line);border-radius:13px;background:#0002}.metric span{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;font-size:21px;margin-top:4px}label{display:block;font-size:12px;font-weight:750;color:#e6e0d5;margin:7px 0 5px}input,select,textarea{width:100%;min-height:42px;border:1px solid #ffffff24;border-radius:10px;background:#111214;color:var(--text);padding:10px;font:inherit}textarea{min-height:72px;resize:vertical}.field{min-width:0}.item{padding:14px;border:1px solid var(--line);border-radius:14px;background:#0002;margin:10px 0}.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.tag{display:inline-block;border:1px solid #d7b47755;color:#f1d5a2;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:800}.history{margin-top:10px;padding:10px;border-radius:10px;background:#ffffff07}.history-row{padding:8px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.history-row:last-child{border:0}.empty{padding:18px;text-align:center;color:var(--muted)}@media(max-width:650px){.wrap{padding:12px}.panel{padding:13px}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.metric strong{font-size:18px}}
-</style></head><body><main class="wrap"><header class="top"><div class="brand">AMBAR <small>WORKSHOP ERP · CUSTOMER INFORMATION</small></div><div class="actions"><button id="back">← Back to Workshop ERP</button><button id="refresh" class="primary">↻ Refresh customer & sales</button><button id="downloadPdf">⇩ Download PDF</button><button id="downloadExcel">⇩ Download Excel</button><button id="sendTelegram">➤ Send PDF to Telegram</button><button id="sendExcelTelegram">➤ Send Excel to Telegram</button></div></header>
+</style><style id="ambar-professional-redesign-2026">
+/* AMBAR PROFESSIONAL DESIGN SYSTEM — visual-only layer; existing markup and app logic preserved */
+:root{
+ color-scheme:light!important;
+ --bg:#f7f6f2!important;--panel:#fff!important;--panel2:#f1eee8!important;
+ --text:#25241f!important;--muted:#77746c!important;--line:#e8e3da!important;
+ --border:#e6e0d6!important;--orange:#9a704d!important;--accent:#9a704d!important;
+ --gold:#b18a62!important;--teal:#55796e!important;--green:#397653!important;
+ --good:#397653!important;--bad:#b34e43!important;--red:#b34e43!important;
+ --shadow:0 12px 34px rgba(52,43,31,.075)!important;
+ --radius:18px;
+}
+html,html[data-theme="dark"],html[data-theme="light"]{color-scheme:light!important;background:#f7f6f2!important}
+*{box-sizing:border-box}
+body{background:#f7f6f2!important;color:#25241f!important;font-family:Inter,"Segoe UI",Arial,sans-serif!important;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit}
+button{transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #b18a6255!important;outline-offset:2px}
+input,select,textarea{background:#fff!important;color:#25241f!important;border:1px solid #e4ded4!important;border-radius:12px!important;box-shadow:none!important}
+input::placeholder,textarea::placeholder{color:#9b978e!important}
+button.primary,.primary,button.btn-primary,.btn.primary,.btn.primary{background:#282720!important;color:#fff!important;border:1px solid #282720!important;border-radius:12px!important;box-shadow:0 6px 16px #28272018!important}
+button.primary:hover,.primary:hover,.btn.primary:hover{background:#4a4034!important;transform:translateY(-1px)}
+button.secondary,.secondary,button.back,.btn:not(.primary){background:#fff!important;color:#49463f!important;border:1px solid #e5dfd5!important;border-radius:12px!important}
+button.danger,.danger{background:#fff5f3!important;color:#a33e34!important;border:1px solid #f0d6d1!important}
+.panel,.glass,.card,.kpi,.metric,.order-card,.product-stat,.sales-report-panel,.report-panel,.modal,.modal-box,.finance-modal-box{background:#fff!important;color:#25241f!important;border:1px solid #e9e4db!important;border-radius:18px!important;box-shadow:0 8px 28px rgba(54,45,33,.055)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.panel,.glass{padding:clamp(14px,2vw,22px)!important}
+.notice{background:#f5f1e9!important;color:#625747!important;border:1px solid #e9dfd0!important;border-radius:12px!important}
+.muted,.sub,.eyebrow,.kpi-label{color:#827d73!important}
+h1,h2,h3,h4,.brand,.brandline,.brand-copy{color:#282720!important;letter-spacing:-.035em}
+h1{font-weight:750!important;letter-spacing:-.045em!important}
+h2,h3{font-weight:700!important}
+label{color:#5d584f!important;font-weight:650}
+.badge,.pill,.tag,.status{border-radius:999px!important}
+table{border-collapse:separate!important;border-spacing:0!important}th{background:#f5f2ec!important;color:#625c52!important;font-weight:700!important}td,th{border-color:#ece7df!important}tr:hover td{background:#faf8f4!important}
+/* CUSTOMER SHOP */
+.wrap{max-width:1240px!important}
+#appHeader{background:rgba(255,255,255,.94)!important;color:#25241f!important;border-bottom:1px solid #eae5dc!important;box-shadow:0 5px 24px rgba(43,37,29,.045)!important;backdrop-filter:blur(18px)!important;padding-top:12px!important;padding-bottom:12px!important}
+#appHeader .brand-logo{border-radius:13px!important;box-shadow:0 4px 14px #3a302218!important}
+#appHeader .brand-copy h1{font-size:19px!important;font-weight:800!important;letter-spacing:-.7px!important}
+#appHeader .brand-copy .sub{font-size:11px!important;letter-spacing:.08em!important;text-transform:uppercase!important}
+#appHeader button,#appHeader .user-profile{background:#f7f5f0!important;color:#39362f!important;border:1px solid #e8e2d8!important;border-radius:13px!important;box-shadow:none!important}
+#appHeader button:hover{background:#eee9df!important}
+.shop-hero{min-height:300px!important;margin:24px 0 22px!important;padding:clamp(26px,5vw,58px)!important;border-radius:24px!important;background:linear-gradient(112deg,#f0ede5 0%,#e9e5db 56%,#ddd5c7 100%)!important;box-shadow:0 16px 42px rgba(65,54,39,.08)!important;align-items:center!important}
+.shop-hero-copy{max-width:540px!important;z-index:2}
+.shop-hero-kicker{color:#8c6a4c!important;font-size:11px!important;font-weight:800!important;letter-spacing:.2em!important}
+.shop-hero h2{font-size:clamp(32px,5vw,54px)!important;line-height:1.04!important;max-width:520px!important;color:#29271f!important;letter-spacing:-.055em!important;margin:12px 0!important}
+.shop-hero p{max-width:430px!important;color:#686257!important;font-size:15px!important;line-height:1.7!important}
+.shop-hero-cta{background:#292820!important;color:white!important;border:0!important;border-radius:12px!important;padding:13px 19px!important;font-weight:700!important;box-shadow:0 8px 20px #29282022!important}
+.shop-hero-art{opacity:.9!important;filter:saturate(.72)!important}
+.language-row{gap:12px!important;margin:18px 0 20px!important}
+.ambar-search-bar{background:#fff!important;border:1px solid #e8e2d9!important;border-radius:14px!important;box-shadow:0 4px 18px #3b33240a!important;min-height:48px!important}
+.ambar-search-bar input{border:0!important;background:transparent!important}
+#myOrdersButton,.my-orders-nav{background:#fff!important;color:#38352e!important;border:1px solid #e6dfd4!important;border-radius:13px!important;box-shadow:none!important}
+#myOrdersButton:hover,.my-orders-nav:hover{background:#f4f0e9!important}
+.product-grid,#productGrid{gap:18px!important}
+.product{background:#fff!important;border:1px solid #e9e4db!important;border-radius:17px!important;overflow:hidden!important;box-shadow:0 5px 22px rgba(49,42,32,.045)!important;backdrop-filter:none!important;transition:transform .2s ease,box-shadow .2s ease!important}
+.product:hover{transform:translateY(-4px)!important;box-shadow:0 15px 34px rgba(49,42,32,.11)!important}
+.product-art{background:#f2f0eb!important;overflow:hidden!important}
+.product-art img{transition:transform .45s ease!important}
+.product:hover .product-art img{transform:scale(1.035)!important}
+.product-body{padding:14px 15px!important}
+.product-body h3{font-size:15px!important;line-height:1.35!important;color:#292820!important;font-weight:700!important}
+.product .price{color:#876344!important;font-size:16px!important;font-weight:800!important}
+.product-foot,.product .muted{color:#817b71!important}
+.favorite-btn{background:#fff!important;border:1px solid #e9e3d9!important;color:#514b42!important;box-shadow:0 3px 10px #0000000b!important}
+.favorite-btn.is-favorite{color:#a44f46!important;background:#fff7f5!important}
+.btn,.actions button,.modal button,.panel button{border-radius:11px!important}
+.panel{margin-top:18px!important}
+.modal,.modal-backdrop{backdrop-filter:blur(10px)!important}
+.modal{border-radius:22px!important}
+.bottom-nav,.bottom-bar,.mobile-nav{background:rgba(255,255,255,.96)!important;border-top:1px solid #e8e3da!important;box-shadow:0 -6px 24px #342b1f0a!important}
+/* ADMIN */
+.admin-wrap,.wrap:has(.head){max-width:1440px!important}
+.head,.admin-head{background:transparent!important;border-bottom:1px solid #e9e4db!important;padding-bottom:16px!important;margin-bottom:20px!important}
+.head h1{font-size:clamp(24px,3vw,34px)!important}
+.admin-tabs button,.admin-menu button,.tab-button{background:#fff!important;color:#625d54!important;border:1px solid #e9e4db!important;border-radius:12px!important}
+.admin-tabs button.active,.admin-menu button.active,.tab-button.active{background:#292820!important;color:#fff!important;border-color:#292820!important}
+.sales-hero{background:linear-gradient(115deg,#f0ece3,#e7dfd2)!important;color:#292820!important;border:1px solid #e3d9ca!important;border-radius:20px!important;box-shadow:none!important}
+.sales-hero h1,.sales-hero h2,.sales-hero strong{color:#292820!important}
+.sales-period-tag,.report-period.active{background:#292820!important;color:#fff!important;border-color:#292820!important}
+.product-stats,.sales-kpis,.grid{gap:14px!important}
+/* WORKSHOP ERP */
+.app{background:#f7f6f2!important;color:#25241f!important}
+.side{background:#fff!important;border-right:1px solid #e8e3da!important;box-shadow:5px 0 24px #352b1e08!important}
+.side .brand,.side .subbrand{color:#292820!important}
+.nav button{background:transparent!important;color:#716b61!important;border:1px solid transparent!important;border-radius:11px!important}
+.nav button.active,.nav button:hover{background:#f2eee7!important;border-color:#e8dfd2!important;color:#292820!important}
+.side-note{color:#837d73!important}
+.main{background:#f7f6f2!important}
+.top{background:rgba(247,246,242,.94)!important;border-bottom:1px solid #e9e4db!important;backdrop-filter:blur(12px)!important}
+.h1{font-size:clamp(25px,3vw,38px)!important;letter-spacing:-.05em!important}
+.card,.kpi{background:#fff!important;border:1px solid #e9e4db!important;box-shadow:0 5px 22px #352b1e08!important}
+.stage-kpi,.nav button.active{color:#292820!important}
+.kanban{gap:14px!important}
+.order,.products,.materials{background:#fff!important;border:1px solid #e9e4db!important;border-radius:15px!important;box-shadow:0 4px 16px #352b1e08!important}
+.status.available,.status.sold,.status,.tag{border:1px solid #e8e1d7!important}
+/* WORKSHOP ADMIN / FINANCE */
+.finance-launch{background:#292820!important;color:#fff!important;border-radius:13px!important;box-shadow:0 8px 20px #2928201c!important}
+.finance-modal{background:#29282099!important;backdrop-filter:blur(8px)!important}
+.finance-modal-box{background:#fff!important;border:1px solid #e7dfd4!important;border-radius:20px!important;overflow:hidden!important}
+.finance-modal-head{background:#fff!important;color:#292820!important;border-bottom:1px solid #e9e4db!important}
+.finance-modal iframe{background:#f7f6f2!important}
+.financial-inventory,body:has(#dashboard-overview){background:#f7f6f2!important}
+body:has(#dashboard-overview){padding:clamp(12px,2vw,24px)!important}
+.hero{background:linear-gradient(115deg,#f0ece3,#e7dfd2)!important;border:1px solid #e4dbce!important;border-radius:20px!important;box-shadow:none!important}
+.hero h1,.hero h2{color:#292820!important}
+.dashboard-nav{background:#fff!important;border:1px solid #e9e4db!important;border-radius:14px!important;padding:7px!important}
+.dashboard-nav button{border-radius:10px!important}
+.dashboard-nav button.active{background:#292820!important;color:#fff!important}
+.overview-link{transition:transform .18s ease,box-shadow .18s ease!important}
+.overview-link:hover{box-shadow:0 12px 26px #352b1e12!important}
+/* Supporting workflow pages */
+body:has(.orders),body:has(.steps),body:has(.metrics){background:#f7f6f2!important}
+.workflow-card,.order-card,.step,.metric,.stat{background:#fff!important;border:1px solid #e9e4db!important;border-radius:15px!important;box-shadow:0 5px 18px #352b1e08!important}
+.nav a,.nav button{border-radius:11px!important}
+@media(max-width:760px){
+ .shop-hero{min-height:235px!important;padding:24px!important;margin:14px 0 16px!important}
+ .shop-hero h2{font-size:34px!important;max-width:330px!important}
+ .shop-hero p{font-size:13px!important;max-width:290px!important}
+ .shop-hero-art{opacity:.35!important;transform:scale(.82)!important;transform-origin:right center!important}
+ .language-row{display:flex!important;flex-wrap:wrap!important}
+ .ambar-search-bar{flex:1 1 100%!important;min-width:0!important}
+ #myOrdersButton,.my-orders-nav{flex:1 1 auto!important;justify-content:center!important}
+ .product-grid,#productGrid{gap:11px!important}
+ .product{border-radius:13px!important}
+ .product-body{padding:10px!important}
+ .product-body h3{font-size:13px!important}
+ .product .price{font-size:14px!important}
+ .panel,.glass{padding:13px!important;border-radius:15px!important}
+ .head{align-items:flex-start!important}
+ .finance-modal-box{border-radius:0!important}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+</style>
+</head><body><main class="wrap"><header class="top"><div class="brand">AMBAR <small>WORKSHOP ERP · CUSTOMER INFORMATION</small></div><div class="actions"><button id="back">← Back to Workshop ERP</button><button id="refresh" class="primary">↻ Refresh customer & sales</button><button id="downloadPdf">⇩ Download PDF</button><button id="downloadExcel">⇩ Download Excel</button><button id="sendTelegram">➤ Send PDF to Telegram</button><button id="sendExcelTelegram">➤ Send Excel to Telegram</button></div></header>
 <section class="panel"><h1>Customer Information</h1><p class="muted">A dedicated Workshop ERP workspace for customer profiles, purchase history, sales totals, delivery and after-sales service. Customer records are saved in Supabase and use permanent unique Customer IDs.</p><div id="notice" class="notice">Checking your protected Workshop ERP session…</div><div id="metrics" class="metrics"></div></section>
 <section class="panel"><h2>Register or edit customer</h2><p class="muted">Customer ID is generated by the database when a new profile is saved. Existing customer IDs stay unchanged when you edit a profile.</p><form id="profileForm"><input id="customerId" type="hidden"><div class="grid"><div class="field"><label for="name">Full name *</label><input id="name" maxlength="200" required></div><div class="field"><label for="sex">Sex</label><select id="sex"><option value="">Prefer not to say</option><option>Female</option><option>Male</option><option>Other</option></select></div><div class="field"><label for="phone">Phone number *</label><input id="phone" maxlength="50" required></div><div class="field"><label for="phone2">Secondary phone</label><input id="phone2" maxlength="50"></div><div class="field"><label for="location">Location / address</label><input id="location" maxlength="500"></div><div class="field"><label for="telegramId">Telegram user ID</label><input id="telegramId" maxlength="80"></div><div class="field"><label for="telegramName">Telegram username</label><input id="telegramName" maxlength="100"></div><div class="field"><label for="type">Customer type</label><select id="type"><option>Individual</option><option>Company</option><option>Other</option></select></div><div class="field"><label for="status">Customer status</label><select id="status"><option>Active</option><option>Inactive</option><option>Archived</option></select></div><div class="field"><label for="measurements">Measurements / preferences</label><textarea id="measurements" maxlength="3000"></textarea></div><div class="field"><label for="serviceNotes">Service / warranty / delivery notes</label><textarea id="serviceNotes" maxlength="3000"></textarea></div></div><div class="actions" style="margin-top:14px"><button class="primary" type="submit">Save customer profile</button><button type="button" id="clear">Clear form</button></div></form></section>
 <section class="panel"><div class="item-head"><div><h2>Customer profiles & linked sales</h2><p class="muted">Order totals below are calculated from saved customer orders matched by Customer ID, Telegram ID, or phone.</p></div></div><label for="search">Search by Customer ID, name, phone or location</label><input id="search" type="search" placeholder="e.g. AMBC-000001 or customer phone"><div id="list"><div class="empty">Loading customer profiles…</div></div><div class="notice">PDF and Excel exports include editable profile fields and linked sales history. Telegram sending requires the recipient to have started the AMBAR bot.</div></section></main>
