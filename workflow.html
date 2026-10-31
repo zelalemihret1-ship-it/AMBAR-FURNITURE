@@ -2,7 +2,76 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#10243a"><title>AMBAR · Order Workflow</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{--navy:#10243a;--blue:#2459a6;--ink:#172536;--muted:#66758a;--line:#dce4ed;--bg:#f4f7fb;--white:#fff;--green:#18794e;--amber:#9b6500;--red:#b42318;--shadow:0 10px 30px #10243a12}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}.top{background:var(--navy);color:#fff;padding:16px max(18px,calc((100vw - 1220px)/2));display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.brand{font-size:18px;font-weight:850;letter-spacing:.08em}.brand span{font-weight:500;color:#b9c9dd}.top small{display:block;color:#b9c9dd;margin-top:3px}.top-actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 13px;border-radius:10px;font-weight:700}.btn.primary{background:var(--blue);border-color:var(--blue);color:white}.btn.dark{background:#1d344f;border-color:#47617d;color:#fff}.wrap{max-width:1220px;margin:auto;padding:26px 18px 56px}.heading{display:flex;justify-content:space-between;gap:18px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px}.eyebrow{color:var(--blue);font-weight:800;text-transform:uppercase;letter-spacing:.1em;font-size:11px}.heading h1{margin:4px 0 5px;font-size:clamp(26px,4vw,36px);letter-spacing:-.04em}.heading p{margin:0;color:var(--muted)}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}.stat,.panel,.step-card,.order-card{background:var(--white);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}.stat{padding:16px}.stat span{display:block;color:var(--muted);font-size:12px;font-weight:700}.stat strong{display:block;font-size:27px;margin-top:5px}.panel{padding:18px;margin-bottom:20px}.panel h2{font-size:16px;margin:0 0 12px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.field label{display:block;font-size:12px;color:var(--muted);font-weight:750;margin-bottom:5px}.field input,.field select,.field textarea,.search{width:100%;border:1px solid #ccd7e4;border-radius:9px;background:#fff;padding:10px 11px;color:var(--ink);outline:none}.field input:focus,.field select:focus,.field textarea:focus,.search:focus{border-color:var(--blue);box-shadow:0 0 0 3px #2459a61c}.field textarea{resize:vertical;min-height:42px}.field.wide{grid-column:span 2}.form-actions{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}.hint{color:var(--muted);font-size:12px}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:22px 0 12px}.toolbar h2{margin:0;font-size:19px}.filters{display:flex;gap:8px;flex-wrap:wrap}.search{min-width:220px;width:auto}.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.order-card{padding:16px;min-width:0}.order-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.order-head h3{margin:0;font-size:16px;overflow-wrap:anywhere}.ref{color:var(--muted);font-size:12px;margin-top:4px}.pill{display:inline-flex;align-items:center;border-radius:99px;padding:5px 8px;font-size:11px;font-weight:800;background:#e9eef5;color:#43536a;white-space:nowrap}.pill.done{background:#dcfce7;color:#166534}.pill.active{background:#dbeafe;color:#1d4ed8}.pill.hold{background:#fff0c2;color:#854d0e}.meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:14px 0}.meta div{background:#f6f8fb;padding:9px;border-radius:9px;min-width:0}.meta small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:800}.meta b{display:block;font-size:13px;overflow-wrap:anywhere;margin-top:2px}.progress{height:6px;background:#e9eef5;border-radius:9px;overflow:hidden;margin:12px 0}.progress i{display:block;height:100%;background:var(--blue);border-radius:9px}.current-step{font-size:12px;color:var(--muted);margin:10px 0 12px}.card-actions{display:flex;gap:8px;flex-wrap:wrap}.card-actions button{flex:1;min-width:90px;padding:8px 9px;border-radius:8px;font-size:12px}.steps{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:13px}.step-dot{font-size:10px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;color:#78869a;background:#fff}.step-dot.past{background:#e5f5ec;border-color:#b5e2c8;color:#17603d}.step-dot.now{background:#e4edff;border-color:#a9c3fa;color:#204d96;font-weight:800}.empty{padding:35px 15px;text-align:center;color:var(--muted);background:white;border:1px dashed #cbd6e2;border-radius:14px;grid-column:1/-1}.toast{position:fixed;right:18px;bottom:18px;background:#10243a;color:white;padding:12px 16px;border-radius:10px;box-shadow:var(--shadow);display:none;z-index:5;max-width:min(90vw,420px)}.modal{position:fixed;inset:0;background:#10243a80;display:none;align-items:center;justify-content:center;padding:18px;z-index:4}.modal.show{display:flex}.modal-box{width:min(560px,100%);background:white;border-radius:16px;padding:20px;max-height:90vh;overflow:auto}.modal-box h2{margin:0 0 15px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}.footer{font-size:12px;color:var(--muted);text-align:center;margin-top:24px}@media(max-width:900px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.board{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.field.wide{grid-column:auto}.stats{gap:8px}.stat{padding:12px}.stat strong{font-size:23px}.wrap{padding:20px 12px 40px}.top{padding:14px 12px}.search{min-width:0;width:100%}.filters{width:100%}}
-</style><style>.auth-screen{max-width:760px;margin:10vh auto;padding:24px;border:1px solid #dce4ed;border-radius:18px;background:#fff;box-shadow:0 10px 30px #10243a12}.auth-screen h1{margin-top:0}.auth-screen p{color:#66758a}.auth-screen button{margin-top:8px}.auth-screen[hidden]{display:none!important}.top,.wrap{display:none}</style></head><body>
+</style><style>.auth-screen{max-width:760px;margin:10vh auto;padding:24px;border:1px solid #dce4ed;border-radius:18px;background:#fff;box-shadow:0 10px 30px #10243a12}.auth-screen h1{margin-top:0}.auth-screen p{color:#66758a}.auth-screen button{margin-top:8px}.auth-screen[hidden]{display:none!important}.top,.wrap{display:none}</style>
+<style id="ambar-premium-iphone-system">
+:root{
+ --ambar-orange:#f47732;--ambar-orange-deep:#e96120;--ambar-ink:#202124;
+ --ambar-muted:#7b8088;--ambar-canvas:#f5f5f7;--ambar-surface:#fff;
+ --ambar-stroke:rgba(35,38,42,.09);--ambar-shadow:0 8px 26px rgba(25,28,32,.075);
+ --ambar-radius:22px;--ambar-safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{background:var(--ambar-canvas);color:var(--ambar-ink);-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Inter,system-ui,sans-serif;letter-spacing:-.012em}
+button,.btn,[role=button],input,select,textarea{font-family:inherit}
+button,.btn,[role=button]{
+ -webkit-appearance:none;appearance:none;min-height:44px;border:0;border-radius:15px;
+ font-weight:650;letter-spacing:-.015em;transition:transform .16s ease,background .18s ease,box-shadow .18s ease,opacity .18s ease;
+ touch-action:manipulation;outline:none
+}
+button:active,.btn:active,[role=button]:active{transform:scale(.965);filter:brightness(.97)}
+button:focus-visible,.btn:focus-visible,[role=button]:focus-visible{outline:3px solid rgba(244,119,50,.28);outline-offset:2px}
+button:disabled,.btn:disabled{opacity:.42;transform:none;cursor:not-allowed}
+.btn,button.btn{
+ display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:13px 19px;
+ background:linear-gradient(180deg,#ff914f 0%,var(--ambar-orange) 100%);color:#fff!important;
+ box-shadow:0 5px 13px rgba(244,119,50,.22);font-size:14px;font-weight:750
+}
+.btn.secondary,button.secondary,.btn.tertiary{
+ background:#fff;color:#282a2e!important;border:1px solid var(--ambar-stroke);
+ box-shadow:0 2px 7px rgba(20,22,25,.045)
+}
+input:not([type=checkbox]):not([type=radio]),select,textarea{
+ min-height:46px;border-radius:15px;border:1px solid rgba(35,38,42,.11);
+ background:#fff;color:#24262a;padding:12px 14px;box-shadow:inset 0 1px 2px rgba(20,22,25,.025);
+ outline:none;transition:border-color .18s,box-shadow .18s
+}
+input:focus,select:focus,textarea:focus{border-color:rgba(244,119,50,.75)!important;box-shadow:0 0 0 4px rgba(244,119,50,.12)!important}
+header,#appHeader{background:rgba(255,255,255,.91)!important;color:#202124!important;border-bottom:1px solid rgba(30,32,35,.07)!important;box-shadow:0 5px 20px rgba(25,28,32,.045)!important;backdrop-filter:blur(22px) saturate(180%)!important;-webkit-backdrop-filter:blur(22px) saturate(180%)!important}
+.brand-copy h1{letter-spacing:-.045em;font-weight:850}
+.brand-copy .sub{color:#858991}
+.btn.secondary,.tab,.icon-btn,.screen-back,.favorite-btn,.service-main,.top-favorites-btn,.top-cart-btn,.user-profile{
+ transition:transform .16s ease,background .18s ease,box-shadow .18s ease
+}
+.tab{background:#fff!important;border:1px solid var(--ambar-stroke)!important;border-radius:999px!important;padding:10px 16px!important;color:#565b63!important;font-weight:650!important}
+.tab.active{background:var(--ambar-orange)!important;border-color:var(--ambar-orange)!important;color:white!important;box-shadow:0 5px 14px rgba(244,119,50,.2)}
+.ambar-search-bar{border-radius:17px!important;background:#fff!important;border:1px solid var(--ambar-stroke)!important;box-shadow:0 3px 12px rgba(25,28,32,.035)!important}
+.product-card,.product-item,.auth-card,.modal-card,.panel,.stat-card,.admin-card,.order-card{
+ border-radius:22px!important;box-shadow:var(--ambar-shadow)!important;border-color:var(--ambar-stroke)!important
+}
+.product-open{border-radius:15px!important}
+.favorite-btn,.icon-btn,.screen-back,.service-main,.top-favorites-btn,.top-cart-btn,.user-profile{
+ width:44px;min-width:44px;height:44px;min-height:44px;border-radius:15px!important;
+ display:inline-flex;align-items:center;justify-content:center;background:#fff!important;
+ border:1px solid var(--ambar-stroke)!important;box-shadow:0 2px 8px rgba(20,22,25,.05)
+}
+.favorite-btn.is-favorite{background:#fff0e8!important;color:var(--ambar-orange)!important}
+.auth-gate{background:rgba(20,22,26,.46)!important;backdrop-filter:blur(12px)}
+.auth-card{background:#fff!important;padding:26px!important}
+a{color:var(--ambar-orange-deep)}
+@media(max-width:640px){
+ .wrap{padding-left:16px!important;padding-right:16px!important;padding-bottom:calc(96px + var(--ambar-safe-bottom))!important}
+ header,#appHeader{margin-left:-16px!important;margin-right:-16px!important;padding:11px 16px!important;gap:9px!important}
+ .brand-logo{width:43px!important;height:43px!important;flex-basis:43px!important;border-radius:13px!important}
+ .brand-copy h1{font-size:17px!important}
+ .brand-copy .sub{font-size:10px!important}
+ .btn,button.btn{min-height:48px;padding:13px 17px}
+ .product-card,.product-item{border-radius:20px!important}
+ .auth-card{margin:16px!important}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+
+</head><body>
 <section id="authScreen" class="auth-screen"><h1>AMBAR Order Workflow</h1><p id="authMessage">Checking your AMBAR administrator access…</p><button id="authRetry" class="btn primary" type="button" hidden>Try again</button></section><header class="top"><div><div class="brand">AMBAR <span>ORDER WORKFLOW</span></div><small>Customer → Sales → Design → Purchasing / Workshop → Delivery</small></div><div class="top-actions"><button class="btn dark" id="exportBtn">Export backup</button><button class="btn dark" id="importBtn">Import backup</button><button class="btn dark" onclick="location.href='/sales-interface'">Sales</button><button class="btn dark" onclick="location.href='/designer-interface'">Designer</button><button class="btn dark" onclick="location.href='/purchaser-interface'">Purchaser</button><button class="btn dark" onclick="location.href='/workshop-interface'">Workshop</button><button class="btn dark" onclick="location.href='/driver-interface'">Driver</button><button class="btn dark" onclick="location.href='/workshop-erp'">← Workshop ERP</button></div></header>
 <main class="wrap"><section class="heading"><div><div class="eyebrow">Operations workspace</div><h1>Order Workflow</h1><p>Track each order from the first customer contact to final delivery.</p></div><button class="btn primary" id="newBtn">＋ Create order</button></section>
 <section class="stats"><div class="stat"><span>ALL ORDERS</span><strong id="statAll">0</strong></div><div class="stat"><span>IN PROGRESS</span><strong id="statActive">0</strong></div><div class="stat"><span>WAITING / ON HOLD</span><strong id="statHold">0</strong></div><div class="stat"><span>DELIVERED</span><strong id="statDone">0</strong></div></section>
