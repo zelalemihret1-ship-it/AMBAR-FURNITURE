@@ -69,12 +69,12 @@ WORKSHOP_STAFF_SESSIONS = {}
 ADMIN_PASSWORD_ATTEMPTS = {}
 ADMIN_PASSWORD_LOCK = threading.Lock()
 MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_URL = os.getenv("AMBAR_V2_SUPABASE_URL", "").strip().rstrip("/")
 # Prefer the legacy service_role JWT for server-to-server Authorization. Some
 # projects also provide a newer sb_secret_* API key; keep it as the apikey when
 # configured, while the service-role JWT remains the Authorization credential.
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_SECRET_KEY = os.getenv("AMBAR_V2_SUPABASE_SECRET_KEY", "").strip() or SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_AUTHORIZATION_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
 SUPABASE_PRODUCTS_TABLE = os.getenv("SUPABASE_PRODUCTS_TABLE", "products").strip() or "products"
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "product-images").strip() or "product-images"
@@ -5459,9 +5459,33 @@ def auto_confirm_orders_loop():
         time.sleep(AUTO_CONFIRM_POLL_SECONDS)
 
 
+def validate_v2_deployment_environment():
+    """Fail closed unless this service is configured for the dedicated V2 bot and database."""
+    if not BOT_TOKEN:
+        raise RuntimeError("V2 startup blocked: set BOT_TOKEN to the token for @AMBAR_SALESBOT.")
+    if BOT_PUBLIC_USERNAME.casefold() != "ambar_salesbot":
+        raise RuntimeError("V2 startup blocked: BOT_PUBLIC_USERNAME must be AMBAR_SALESBOT.")
+    if not WEBAPP_URL.startswith("https://"):
+        raise RuntimeError("V2 startup blocked: WEBAPP_URL must be the HTTPS V2 Render URL.")
+    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+        raise RuntimeError("V2 startup blocked: set AMBAR_V2_SUPABASE_URL and AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY for the separate V2 Supabase project.")
+    if not SUPABASE_URL.startswith("https://") or ".supabase.co" not in SUPABASE_URL:
+        raise RuntimeError("V2 startup blocked: AMBAR_V2_SUPABASE_URL must be the HTTPS URL of the dedicated V2 Supabase project.")
+    try:
+        response = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=12)
+        payload = response.json()
+    except Exception as exc:
+        raise RuntimeError(f"V2 startup blocked: Telegram bot identity check failed ({type(exc).__name__}).") from exc
+    actual = str((payload.get("result") or {}).get("username") or "").lstrip("@") if payload.get("ok") else ""
+    if actual.casefold() != "ambar_salesbot":
+        raise RuntimeError(f"V2 startup blocked: BOT_TOKEN belongs to @{actual or 'unknown'}, not @AMBAR_SALESBOT. The old production bot will not be started by this service.")
+    log.info("V2 deployment preflight passed: Telegram bot=@%s; V2 Supabase project URL configured; Telegram-only access enabled.", actual)
+
+
 def main():
     global telegram_thread_started, _auto_confirm_thread_started
-    if BOT_TOKEN and not telegram_thread_started:
+    validate_v2_deployment_environment()
+    if not telegram_thread_started:
         thread = threading.Thread(target=start_telegram_polling, name="telegram-polling", daemon=True)
         thread.start()
         telegram_thread_started = True
