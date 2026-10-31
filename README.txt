@@ -74,35 +74,3 @@ LATEST UPDATE (2026-10-23): The Workshop ERP includes an English/Amharic languag
 
 
 WORKSHOP ERP BUG FIX (2026-10-23): Corrected a JavaScript scope error in daily production-stage reporting (`inRange is not defined`) that could be misreported as a shared cloud connection failure. The standalone ERP and embedded Telegram ERP are synchronized. This code fix does not change Supabase credentials or table permissions.
-
-
-AMBAR STOREFRONT UPDATE (2026)
-==============================
-The customer storefront has been refreshed to a clean, light furniture-shopping
-layout inspired by the supplied Elegance Home reference: promotional hero,
-category browsing, compact two-column product cards, search and bottom navigation.
-Existing ordering, Telegram authentication, admin, workshop and Supabase workflows
-are retained.
-
-Telegram bot username: @ambar_salesbot
-Channel invitation: https://t.me/+YO20OQ1F1VIyMWZk
-
-DEPLOYMENT CONFIGURATION
-------------------------
-Use .env.example as a checklist for your hosting provider's environment settings.
-Do not commit .env or paste real credentials into source code.
-
-BOT_TOKEN (or TELEGRAM_BOT_TOKEN) must contain the token issued by BotFather.
-BOT_PUBLIC_USERNAME is set to ambar_salesbot by default.
-SERVICE_CHAT_ID is NOT the channel invite link. For order notifications, set it
-to the channel's numeric chat ID (usually starts with -100), add the bot to the
-channel as an administrator, and grant permission to post messages.
-The supplied invite URL is configured as a customer-facing community link.
-
-For Supabase, set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or the supported
-AMBAR_V2_SUPABASE_URL and AMBAR_V2_SUPABASE_SERVICE_ROLE_KEY aliases. Keep the
-service-role/secret key server-side only. SUPABASE_ANON_KEY is not a replacement
-for the service-role key for protected server operations.
-
-Existing legacy environment names remain supported. Rotate any credentials that
-have previously been exposed in a public repository or chat.
