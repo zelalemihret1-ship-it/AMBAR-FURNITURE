@@ -71,7 +71,19 @@ a{color:var(--ambar-orange-deep)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 </style>
 
-</head><body><main class="wrap"><header class="top"><div><div class="eyebrow">AMBAR Furniture · Workshop ERP</div><h1 id="title">Processes & Workflows</h1><div class="muted" id="subtitle">A simple guide to how records move through the business.</div></div><div class="language"><button class="primary" id="enBtn" onclick="setLang('en')">English</button><button id="amBtn" onclick="setLang('am')">አማርኛ</button><a class="btn" href="workshop-erp.html">← Back to Workshop ERP</a></div></header>
+<style id="ambar-professional-light-theme">
+:root{color-scheme:light;--bg:#f5f7fa;--panel:#ffffff;--panel2:#f8fafc;--text:#172033;--muted:#647084;--line:#e3e8ef;--border:#e3e8ef;--gold:#b7791f;--orange:#d97706;--teal:#0f766e;--green:#16835d;--red:#c2413b;--shadow:0 12px 34px rgba(15,23,42,.07)}
+html,body{background:var(--bg)!important;color:var(--text)!important}
+body{background-image:none!important}
+header,.top,.hero,.head,.panel,.card,.glass,.glass-panel,.section,.workspace,.view,.modal-card,.auth-card,.admin-card,.stat-card,.order-card,.category-group,.dashboard-card,.settings-card,.table-wrap,.content-card,.box,.card-box{background-color:#fff!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:var(--shadow)}
+p,small,.muted,.sub,.hint,.description{color:var(--muted)}
+input,select,textarea{background:#fff!important;color:var(--text)!important;border:1px solid #d7dee8!important;border-radius:10px}
+button.secondary,.btn.secondary,.secondary{background:#f1f5f9!important;color:#263244!important;border:1px solid #dbe2eb!important}
+table th{background:#f1f5f9!important;color:#344054!important}
+table td{border-color:#e7ebf0!important;color:var(--text)}
+a{color:#a65d12}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style></head><body><main class="wrap"><header class="top"><div><div class="eyebrow">AMBAR Furniture · Workshop ERP</div><h1 id="title">Processes & Workflows</h1><div class="muted" id="subtitle">A simple guide to how records move through the business.</div></div><div class="language"><button class="primary" id="enBtn" onclick="setLang('en')">English</button><button id="amBtn" onclick="setLang('am')">አማርኛ</button><a class="btn" href="workshop-erp.html">← Back to Workshop ERP</a></div></header>
 <section class="card"><h2 id="productionTitle">Furniture order → production → delivery</h2><div class="steps" id="productionSteps"></div></section>
 <section class="grid"><article class="card"><h2 id="inventoryTitle">Showroom inventory workflow</h2><div class="steps" id="inventorySteps"></div></article><article class="card"><h2 id="materialsTitle">Raw materials workflow</h2><div class="steps" id="materialsSteps"></div></article></section>
 <section class="grid"><article class="card"><h2 id="salesTitle">Sales and payment workflow</h2><div class="steps" id="salesSteps"></div></article><article class="card"><h2 id="reportsTitle">Reports workflow</h2><div class="steps" id="reportsSteps"></div></article></section>
