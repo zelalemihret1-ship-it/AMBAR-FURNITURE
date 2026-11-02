@@ -71,7 +71,19 @@ a{color:var(--ambar-orange-deep)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 </style>
 
-</head><body>
+<style id="ambar-professional-light-theme">
+:root{color-scheme:light;--bg:#f5f7fa;--panel:#ffffff;--panel2:#f8fafc;--text:#172033;--muted:#647084;--line:#e3e8ef;--border:#e3e8ef;--gold:#b7791f;--orange:#d97706;--teal:#0f766e;--green:#16835d;--red:#c2413b;--shadow:0 12px 34px rgba(15,23,42,.07)}
+html,body{background:var(--bg)!important;color:var(--text)!important}
+body{background-image:none!important}
+header,.top,.hero,.head,.panel,.card,.glass,.glass-panel,.section,.workspace,.view,.modal-card,.auth-card,.admin-card,.stat-card,.order-card,.category-group,.dashboard-card,.settings-card,.table-wrap,.content-card,.box,.card-box{background-color:#fff!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:var(--shadow)}
+p,small,.muted,.sub,.hint,.description{color:var(--muted)}
+input,select,textarea{background:#fff!important;color:var(--text)!important;border:1px solid #d7dee8!important;border-radius:10px}
+button.secondary,.btn.secondary,.secondary{background:#f1f5f9!important;color:#263244!important;border:1px solid #dbe2eb!important}
+table th{background:#f1f5f9!important;color:#344054!important}
+table td{border-color:#e7ebf0!important;color:var(--text)}
+a{color:#a65d12}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style></head><body>
 <section id="authScreen" class="auth-screen"><h1>AMBAR Order Workflow</h1><p id="authMessage">Checking your AMBAR administrator access…</p><button id="authRetry" class="btn primary" type="button" hidden>Try again</button></section><header class="top"><div><div class="brand">AMBAR <span>ORDER WORKFLOW</span></div><small>Customer → Sales → Design → Purchasing / Workshop → Delivery</small></div><div class="top-actions"><button class="btn dark" id="exportBtn">Export backup</button><button class="btn dark" id="importBtn">Import backup</button><button class="btn dark" onclick="location.href='/sales-interface'">Sales</button><button class="btn dark" onclick="location.href='/designer-interface'">Designer</button><button class="btn dark" onclick="location.href='/purchaser-interface'">Purchaser</button><button class="btn dark" onclick="location.href='/workshop-interface'">Workshop</button><button class="btn dark" onclick="location.href='/driver-interface'">Driver</button><button class="btn dark" onclick="location.href='/workshop-erp'">← Workshop ERP</button></div></header>
 <main class="wrap"><section class="heading"><div><div class="eyebrow">Operations workspace</div><h1>Order Workflow</h1><p>Track each order from the first customer contact to final delivery.</p></div><button class="btn primary" id="newBtn">＋ Create order</button></section>
 <section class="stats"><div class="stat"><span>ALL ORDERS</span><strong id="statAll">0</strong></div><div class="stat"><span>IN PROGRESS</span><strong id="statActive">0</strong></div><div class="stat"><span>WAITING / ON HOLD</span><strong id="statHold">0</strong></div><div class="stat"><span>DELIVERED</span><strong id="statDone">0</strong></div></section>
